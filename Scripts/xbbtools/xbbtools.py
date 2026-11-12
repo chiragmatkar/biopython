@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Copyright 2000 by Thomas Sicheritz-Ponten.
-# Copyrigth 2016 by Markus Piotrowski.
+# Copyright 2016 by Markus Piotrowski.
 # All rights reserved.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
@@ -15,7 +15,6 @@ import sys
 import tkinter as tk
 
 from xbb_widget import xbb_widget
-
 
 win = tk.Tk()
 win.title("xbb tools")

@@ -5,11 +5,17 @@
 
 """Model class, used in Structure objects."""
 
+from typing import TYPE_CHECKING
+
 from Bio.PDB.Entity import Entity
 from Bio.PDB.internal_coords import IC_Chain
 
+if TYPE_CHECKING:
+    from Bio.PDB.Chain import Chain
+    from Bio.PDB.Structure import Structure
 
-class Model(Entity):
+
+class Model(Entity["Structure", "Chain"]):
     """The object representing a model in a structure.
 
     In a structure derived from an X-ray crystallography experiment,
@@ -35,7 +41,7 @@ class Model(Entity):
 
     def __repr__(self):
         """Return model identifier."""
-        return "<Model id=%s>" % self.get_id()
+        return f"<Model id={self.get_id()}>"
 
     def get_chains(self):
         """Return chains."""

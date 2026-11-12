@@ -20,7 +20,6 @@ For drawing capabilities, this module uses reportlab to draw and write
 the diagram: http://www.reportlab.com
 """
 
-
 from reportlab.lib import colors
 
 # GenomeDiagram imports
@@ -266,12 +265,12 @@ class Track:
 
         """
         if not verbose:  # Return the short description
-            return "%s" % self  # Use __str__ method instead
+            return f"{self}"  # Use __str__ method instead
         else:  # Return the long description
-            outstr = ["\n<%s: %s>" % (self.__class__, self.name)]
+            outstr = [f"\n<{self.__class__}: {self.name}>"]
             outstr.append("%d sets" % len(self._sets))
             for key in self._sets:
-                outstr.append("set: %s" % self._sets[key])
+                outstr.append(f"set: {self._sets[key]}")
             return "\n".join(outstr)
 
     def __getitem__(self, key):
@@ -280,6 +279,6 @@ class Track:
 
     def __str__(self):
         """Return a formatted string with information about the Track."""
-        outstr = ["\n<%s: %s>" % (self.__class__, self.name)]
+        outstr = [f"\n<{self.__class__}: {self.name}>"]
         outstr.append("%d sets" % len(self._sets))
         return "\n".join(outstr)

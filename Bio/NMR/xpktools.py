@@ -4,12 +4,11 @@
 # as part of this package.
 """Tools to manipulate data from nmrview .xpk peaklist files."""
 
-
 HEADERLEN = 6
 
 
 class XpkEntry:
-    """Provide dictonary access to single entry from nmrview .xpk file.
+    """Provide dictionary access to single entry from nmrview .xpk file.
 
     This class is suited for handling single lines of non-header data
     from an nmrview .xpk file. This class provides methods for extracting
@@ -95,7 +94,6 @@ class Peaklist:
     def __init__(self, infn):
         """Initialize the class."""
         with open(infn) as infile:
-
             # Read in the header lines
             self.firstline = infile.readline().split("\012")[0]
             self.axislabels = infile.readline().split("\012")[0]
@@ -270,10 +268,8 @@ def data_table(fn_list, datalabel, keyatom):
     maxr = dict_list[0]["maxres"]
 
     for dictionary in dict_list:
-        if maxr < dictionary["maxres"]:
-            maxr = dictionary["maxres"]
-        if minr > dictionary["minres"]:
-            minr = dictionary["minres"]
+        maxr = max(maxr, dictionary["maxres"])
+        minr = min(minr, dictionary["minres"])
 
     res = minr
     while res <= maxr:  # s.t. res numbers

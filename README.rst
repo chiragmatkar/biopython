@@ -1,25 +1,31 @@
-.. image:: https://img.shields.io/pypi/v/biopython.svg
+.. image:: https://img.shields.io/pypi/v/biopython.svg?logo=pypi
    :alt: Biopython on the Python Package Index (PyPI)
    :target: https://pypi.python.org/pypi/biopython
-.. image:: https://img.shields.io/conda/vn/conda-forge/biopython.svg
+.. image:: https://img.shields.io/conda/vn/conda-forge/biopython.svg?logo=conda-forge
    :alt: Biopython on the Conda package conda-forge channel
    :target: https://anaconda.org/conda-forge/biopython
-.. image:: https://img.shields.io/travis/biopython/biopython/master.svg?logo=travis
-   :alt: Linux testing with TravisCI
-   :target: https://travis-ci.org/biopython/biopython/branches
+.. image:: https://results.pre-commit.ci/badge/github/biopython/biopython/master.svg
+   :target: https://results.pre-commit.ci/latest/github/biopython/biopython/master
+   :alt: pre-commit.ci status
+.. image:: https://img.shields.io/circleci/build/github/biopython/biopython.svg?logo=circleci
+   :alt: Linux testing with CircleCI
+   :target: https://app.circleci.com/pipelines/github/biopython/biopython
 .. image:: https://img.shields.io/appveyor/ci/biopython/biopython/master.svg?logo=appveyor
    :alt: Windows testing with AppVeyor
    :target: https://ci.appveyor.com/project/biopython/biopython/history
-.. image:: https://img.shields.io/codecov/c/github/biopython/biopython/master.svg
-   :alt: TravisCI test coverage
+.. image:: https://img.shields.io/github/actions/workflow/status/biopython/biopython/ci.yml?logo=github-actions
+   :alt: GitHub workflow status
+   :target: https://github.com/biopython/biopython/actions
+.. image:: https://img.shields.io/codecov/c/github/biopython/biopython/master.svg?logo=codecov
+   :alt: Test coverage on CodeCov
    :target: https://codecov.io/github/biopython/biopython/
-.. image:: http://depsy.org/api/package/pypi/biopython/badge.svg
+.. image:: https://depsy.org/api/package/pypi/biopython/badge.svg
    :alt: Research software impact on Depsy
-   :target: http://depsy.org/package/python/biopython
+   :target: https://depsy.org/package/python/biopython
 
 .. image:: https://github.com/biopython/biopython/raw/master/Doc/images/biopython_logo_m.png
    :alt: The Biopython Project
-   :target: http://biopython.org
+   :target: https://biopython.org
 
 Biopython README file
 =====================
@@ -27,19 +33,20 @@ Biopython README file
 The Biopython Project is an international association of developers of freely
 available Python tools for computational molecular biology.
 
-Our user-centric documentation is hosted on http://biopython.org including
-the main Biopython Tutorial and Cookbook:
-
-* HTML - http://biopython.org/DIST/docs/tutorial/Tutorial.html
-* PDF - http://biopython.org/DIST/docs/tutorial/Tutorial.pdf
-
 This README file is intended primarily for people interested in working
 with the Biopython source code, either one of the releases from the
-http://biopython.org website, or from our repository on GitHub
+https://biopython.org website, or from our repository on GitHub
 https://github.com/biopython/biopython
 
+Our user-centric documentation, `The Biopython Tutorial and Cookbook, and API
+documentation <https://biopython.org/docs/latest/>`_, is generated from our
+repository using Sphinx.
+
 The `NEWS <https://github.com/biopython/biopython/blob/master/NEWS.rst>`_
-file summarises the changes in each release of Biopython.
+file summarises the changes in each release of Biopython, alongside the
+`DEPRECATED
+<https://github.com/biopython/biopython/blob/master/DEPRECATED.rst>`_
+file which notes API breakages.
 
 The Biopython package is open source software made available under generous
 terms. Please see the `LICENSE
@@ -58,16 +65,16 @@ https://doi.org/10.1093/bioinformatics/btp163 pmid:19304878
 For the impatient
 =================
 
-Python 3.6 onwards, include the package management system "pip" which should
-allow you to install Biopython (and its dependency NumPy if needed), upgrade
-or uninstall with just one terminal command::
+Python includes the package management system "pip" which should allow you to
+install Biopython (and its dependency NumPy if needed), upgrade or uninstall
+with just one terminal command::
 
     pip install biopython
     pip install --upgrade biopython
     pip uninstall biopython
 
 Since Biopython 1.70 we have provided pre-compiled binary wheel packages on
-PyPI for Linux, Mac OS X and Windows. This means pip install should be quick,
+PyPI for Linux, macOS and Windows. This means pip install should be quick,
 and not require a compiler.
 
 As a developer or potential contributor, you may wish to download, build and
@@ -77,49 +84,47 @@ install Biopython yourself. This is described below.
 Python Requirements
 ===================
 
-We currently recommend using Python 3.8 from http://www.python.org
+We currently recommend using Python 3.13 from https://www.python.org
 
 Biopython is currently supported and tested on the following Python
 implementations:
 
-- Python 3.6, 3.7, 3.8 -- see http://www.python.org
+- Python 3.10, 3.11, 3.12, 3.13, 3.14 and the release candidate for 3.15. See
+  https://www.python.org
 
-- PyPy3.6 v7.3.1 -- see http://www.pypy.org
-
-Biopython 1.68 was our final release to support Python 2.6, while Biopython
-1.76 was our final release to support Python 2.7 and Python 3.5.
+- PyPy3.10 v7.3.17 -- or later, see https://www.pypy.org
 
 
 Optional Dependencies
 =====================
 
-Biopython requires NumPy (see http://www.numpy.org) which will be installed
+Biopython requires NumPy (see https://www.numpy.org) which will be installed
 automatically if you install Biopython with pip (see below for compiling
 Biopython yourself).
 
 Depending on which parts of Biopython you plan to use, there are a number of
 other optional Python dependencies, which can be installed later if needed:
 
-- ReportLab, see http://www.reportlab.com/opensource/ (optional)
+- ReportLab, see https://www.reportlab.com/opensource/ (optional)
   This package is only used in ``Bio.Graphics``, so if you do not need this
   functionality, you will not need to install this package.
 
-- matplotlib, see http://matplotlib.org/ (optional)
+- matplotlib, see https://matplotlib.org/ (optional)
   ``Bio.Phylo`` uses this package to plot phylogenetic trees.
 
 - networkx, see https://networkx.github.io/ (optional) and
   pygraphviz or pydot, see https://pygraphviz.github.io/ and
-  http://code.google.com/p/pydot/ (optional)
+  https://code.google.com/p/pydot/ (optional)
   These packages are used for certain niche functions in ``Bio.Phylo``.
 
 - rdflib, see https://github.com/RDFLib/rdflib (optional)
   This package is used in the CDAO parser under ``Bio.Phylo``.
 
-- psycopg2, see http://initd.org/psycopg/ (optional) or
-  PyGreSQL (pgdb), see http://www.pygresql.org/ (optional)
+- psycopg2, see https://initd.org/psycopg/ (optional) or
+  PyGreSQL (pgdb), see https://www.pygresql.org/ (optional)
   These packages are used by ``BioSQL`` to access a PostgreSQL database.
 
-- MySQL Connector/Python, see http://dev.mysql.com/downloads/connector/python/
+- MySQL Connector/Python, see https://dev.mysql.com/downloads/connector/python/
   This package is used by ``BioSQL`` to access a MySQL database, and is
   supported on PyPy too.
 
@@ -144,10 +149,11 @@ at compile time:
 - Python including development header files like ``python.h``, which on Linux
   are often not installed by default (trying looking for and installing a
   package named ``python-dev`` or ``python-devel`` as well as the ``python``
-  pacakge).
+  package).
 
 - Appropriate C compiler for your version of Python, for example GCC on Linux,
-  MSVC on Windows. For Mac OS X, or as it is now branded, macOS, use Apple's
+  or MSVC on Windows. For Windows, you must install the 'Visual Studio Build Tools'
+  and select the 'Desktop development with C++' workload. For macOS, use Apple's
   command line tools, which can be installed with the terminal command::
 
       xcode-select --install
@@ -158,21 +164,18 @@ at compile time:
 Then either download and decompress our source code, or fetch it using git.
 Now change directory to the Biopython source code folder and run::
 
-    python setup.py build
-    python setup.py test
-    sudo python setup.py install
+    pip install -e . --group dev
+    cd Tests
+    python run_tests.py
 
 Substitute ``python`` with your specific version if required, for example
 ``python3``, or ``pypy3``.
 
-To exlude tests that require an internet connection (and which may take a long
-time), use the ``--offline`` option::
+To exclude tests that require an internet connection (and which may take a
+long time), use the ``--offline`` option::
 
-    python setup.py test --offline
-
-If you need to do additional configuration, e.g. changing the install directory
-prefix, please type ``python setup.py``.
-
+    cd Tests
+    python run_tests.py --offline
 
 Testing
 =======
@@ -181,13 +184,15 @@ Biopython includes a suite of regression tests to check if everything is
 running correctly. To run the tests, go to the biopython source code
 directory and type::
 
-    python setup.py build
-    python setup.py test
+    pip install -e . --group dev
+    cd Tests
+    python run_tests.py
 
 If you want to skip the online tests (which is recommended when doing repeated
 testing), use::
 
-    python setup.py test --offline
+    cd Tests
+    python run_tests.py --offline
 
 Do not panic if you see messages warning of skipped tests::
 
@@ -264,8 +269,8 @@ administration, and whatever else comes up.
 
 If you wish to contribute, please first read `CONTRIBUTING.rst
 <https://github.com/biopython/biopython/blob/master/CONTRIBUTING.rst>`_ here,
-visit our web site http://biopython.org and join our mailing list:
-http://biopython.org/wiki/Mailing_lists
+visit our web site https://biopython.org and join our mailing list:
+https://biopython.org/wiki/Mailing_lists
 
 
 Distribution Structure
@@ -281,7 +286,7 @@ Distribution Structure
   were removed or no longer recommended for use, and how to update code that
   uses those modules.
 - ``MANIFEST.in`` -- Configures which files to include in releases.
-- ``setup.py``    -- Installation file.
+- ``pyproject.toml`` -- Project metadata and build configuration.
 - ``Bio/``        -- The main code base code.
 - ``BioSQL/``     -- Code for using Biopython with BioSQL databases.
 - ``Doc/``        -- Documentation.

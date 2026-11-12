@@ -6,11 +6,13 @@
 """Bio.SearchIO parser for HHSUITE version 2 and 3 plain text output format."""
 
 import re
-from collections import OrderedDict
 import warnings
 
+from Bio.SearchIO._model import Hit
+from Bio.SearchIO._model import HSP
+from Bio.SearchIO._model import HSPFragment
+from Bio.SearchIO._model import QueryResult
 from Bio.SearchIO._utils import read_forward
-from Bio.SearchIO._model import QueryResult, Hit, HSP, HSPFragment
 
 __all__ = ("Hhsuite2TextParser",)
 
@@ -34,7 +36,7 @@ _END_OF_FILE_MARKER = "Done!"
 _PROGRAM = "HHSUITE"
 
 # Maximum number of lines to read before expecting a hit block
-# This determines the maximum numnber of hits that would be allowed in
+# This determines the maximum number of hits that would be allowed in
 # the initial hit table.
 MAX_READ_UNTIL = 5000
 
@@ -193,7 +195,7 @@ class Hhsuite2TextParser:
     def _create_qresult(self, hit_blocks):
         """Create the Biopython data structures from the parsed data (PRIVATE)."""
         query_id = self.query_id
-        hit_dict = OrderedDict()
+        hit_dict = {}
 
         for output_index, block in enumerate(hit_blocks):
             hit_id = block["hit_id"]

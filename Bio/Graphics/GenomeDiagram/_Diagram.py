@@ -28,11 +28,11 @@ except ImportError:
     # This is an optional part of ReportLab, so may not be installed.
     renderPM = None
 
-from ._LinearDrawer import LinearDrawer
-from ._CircularDrawer import CircularDrawer
-from ._Track import Track
-
 from Bio.Graphics import _write
+
+from ._CircularDrawer import CircularDrawer
+from ._LinearDrawer import LinearDrawer
+from ._Track import Track
 
 
 def _first_defined(*args):
@@ -403,7 +403,7 @@ class Diagram:
 
     def __str__(self):
         """Return a formatted string describing the diagram."""
-        outstr = ["\n<%s: %s>" % (self.__class__, self.name)]
+        outstr = [f"\n<{self.__class__}: {self.name}>"]
         outstr.append("%d tracks" % len(self.tracks))
         for level in self.get_levels():
             outstr.append("Track %d: %s\n" % (level, self.tracks[level]))

@@ -1,24 +1,22 @@
-# Copyright 2013 by Zheng Ruan (zruan1991@gmail.com).
-# All rights reserved.
-# This code is part of the Biopython distribution and governed by its
-# license.  Please see the LICENSE file that should have been included
-# as part of this package.
-
+# Copyright 2013 by Zheng Ruan (zruan1991@gmail.com). All rights reserved.
+#
+# This file is part of the Biopython distribution and governed by your
+# choice of the "Biopython License Agreement" or the "BSD 3-Clause License".
+# Please see the LICENSE file that should have been included as part of this
+# package.
 """Code for dealing with Codon Alignments."""
 
-import copy
-from collections.abc import Mapping, Iterable
-
-from Bio import BiopythonWarning
-from Bio import BiopythonExperimentalWarning
-
-from Bio.SeqRecord import SeqRecord
-from Bio.Data import CodonTable
-
-from Bio.codonalign.codonseq import CodonSeq
-from Bio.codonalign.codonalignment import CodonAlignment, mktest
-
 import warnings
+from collections.abc import Iterable
+from collections.abc import Mapping
+
+from Bio import BiopythonExperimentalWarning
+from Bio import BiopythonWarning
+from Bio.codonalign.codonalignment import CodonAlignment
+from Bio.codonalign.codonalignment import mktest
+from Bio.codonalign.codonseq import CodonSeq
+from Bio.Data import CodonTable
+from Bio.SeqRecord import SeqRecord
 
 warnings.warn(
     "Bio.codonalign is an experimental module which may undergo "
@@ -61,12 +59,51 @@ def build(
     >>> pro1 = SeqRecord(Seq('MSR'), id='pro1')
     >>> pro2 = SeqRecord(Seq('M-R'), id='pro2')
     >>> aln = MultipleSeqAlignment([pro1, pro2])
+    >>> print(aln)
+    Alignment with 2 rows and 3 columns
+    MSR pro1
+    M-R pro2
     >>> codon_aln = build(aln, [seq1, seq2])
     >>> print(codon_aln)
     CodonAlignment with 2 rows and 9 columns (3 codons)
     ATGTCTCGT pro1
     ATG---CGT pro2
 
+    Using the newer codon aligner in Bio.Align, this analysis can be performed
+    as follows:
+
+    >>> from Bio.Align import codon_align
+    >>> protein_alignment = aln.alignment  # Convert to a new-style Alignment object
+    >>> print(protein_alignment)
+    pro1              0 MSR 3
+                      0 |-| 3
+    pro2              0 M-R 2
+    <BLANKLINE>
+    >>> codon_alignment = codon_align(protein_alignment, [seq1, seq2])
+    >>> print(codon_alignment)
+    pro1              0 ATGTCTCGT 9
+                      0 |||---||| 9
+    pro2              0 ATG---CGT 6
+    <BLANKLINE>
+
+    For comparison, this is what you get if you directly align the nucleotide
+    sequences to each other:
+
+    >>> from Bio.Align import global_align
+    >>> naive_alignments = global_align(seq1, seq2)
+    >>> for naive_alignment in naive_alignments:
+    ...     print(naive_alignment)
+    pro1              0 ATGTCTCGT 9
+                      0 |||-|--|| 9
+    pro2              0 ATG-C--GT 6
+    <BLANKLINE>
+    pro1              0 ATGTCTCGT 9
+                      0 |||---||| 9
+    pro2              0 ATG---CGT 6
+    <BLANKLINE>
+
+    i.e. the correct alignment as well as an incorrect alignment with
+    incomplete codons.
     """
     # TODO
     # add an option to allow the user to specify the returned object?
@@ -120,7 +157,7 @@ def build(
                 for record in nucl_seqs:
                     key = record.id
                     if key in d:
-                        raise ValueError("Duplicate key '%s'" % key)
+                        raise ValueError(f"Duplicate key '{key}'")
                     d[key] = record
                 nucl_seqs = d
             corr_method = 2
@@ -156,7 +193,7 @@ def build(
             try:
                 nucl_id = corr_dict[pro_rec.id]
             except KeyError:
-                print("Protein record (%s) is not in corr_dict!" % pro_rec.id)
+                print(f"Protein record ({pro_rec.id}) is not in corr_dict!")
                 exit(1)
             pro_nucl_pair.append((pro_rec, nucl_seqs[nucl_id]))
 
@@ -187,7 +224,7 @@ def build(
                 pair[1],
                 corr_span,
                 gap_char=gap_char,
-                complete_protein=False,
+                complete_protein=complete_protein,
                 codon_table=codon_table,
                 max_score=max_score,
             )
@@ -246,7 +283,7 @@ def _get_aa_regex(codon_table, stop="*", unknown="X"):
 
 
 def _check_corr(
-    pro, nucl, gap_char, codon_table, complete_protein=False, anchor_len=10,
+    pro, nucl, gap_char, codon_table, complete_protein=False, anchor_len=10
 ):
     """Check if the nucleotide can be translated into the protein (PRIVATE).
 
@@ -265,7 +302,7 @@ def _check_corr(
         if aa != gap_char:
             pro_re += aa2re[aa]
 
-    nucl_seq = str(nucl.seq.upper().ungap(gap_char))
+    nucl_seq = str(nucl.seq.upper().replace(gap_char, ""))
     match = re.search(pro_re, nucl_seq)
     if match:
         # mode = 0, direct match
@@ -571,7 +608,7 @@ def _merge_aa2re(aa1, aa2, shift_val, aa2re, reid):
 
 
 def _get_codon_rec(
-    pro, nucl, span_mode, gap_char, codon_table, complete_protein=False, max_score=10,
+    pro, nucl, span_mode, gap_char, codon_table, complete_protein=False, max_score=10
 ):
     """Generate codon alignment based on regular re match (PRIVATE).
 
@@ -586,17 +623,17 @@ def _get_codon_rec(
 
     """
     import re
+
     from Bio.Seq import Seq
 
-    nucl_seq = nucl.seq.ungap(gap_char)
+    nucl_seq = nucl.seq.replace(gap_char, "")
     span = span_mode[0]
     mode = span_mode[1]
     aa2re = _get_aa_regex(codon_table)
     if mode in (0, 1):
-        if len(pro.seq.ungap(gap_char)) * 3 != (span[1] - span[0]):
+        if len(pro.seq.replace(gap_char, "")) * 3 != (span[1] - span[0]):
             raise ValueError(
-                f"Protein Record {pro.id} and "
-                f"Nucleotide Record {nucl.id} do not match!"
+                f"Protein Record {pro.id} and Nucleotide Record {nucl.id} do not match!"
             )
         aa_num = 0
         codon_seq = CodonSeq()
@@ -606,7 +643,7 @@ def _get_codon_rec(
             elif complete_protein and aa_num == 0:
                 this_codon = nucl_seq[span[0] : span[0] + 3]
                 if not re.search(
-                    _codons2re[codon_table.start_codons], this_codon.upper()
+                    _codons2re(codon_table.start_codons), str(this_codon.upper())
                 ):
                     max_score -= 1
                     warnings.warn(
@@ -672,7 +709,7 @@ def _get_codon_rec(
             elif complete_protein and aa_num == 0:
                 this_codon = nucl_seq[rf_table[0] : rf_table[0] + 3]
                 if not re.search(
-                    _codons2re[codon_table.start_codons], this_codon.upper()
+                    _codons2re(codon_table.start_codons), str(this_codon.upper())
                 ):
                     max_score -= 1
                     warnings.warn(
@@ -684,7 +721,7 @@ def _get_codon_rec(
                     aa_num += 1
             else:
                 if (
-                    aa_num < len(pro.seq.ungap("-")) - 1
+                    aa_num < len(pro.seq.replace("-", "")) - 1
                     and rf_table[aa_num + 1] - rf_table[aa_num] - 3 < 0
                 ):
                     max_score -= 1

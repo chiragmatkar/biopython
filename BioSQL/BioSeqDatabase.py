@@ -15,14 +15,10 @@
 This provides interfaces for loading biological objects from a relational
 database, and is compatible with the BioSQL standards.
 """
-import os
-
-from Bio import BiopythonDeprecationWarning
 
 from . import BioSeq
-from . import Loader
 from . import DBUtils
-
+from . import Loader
 
 _POSTGRES_RULES_PRESENT = False  # Hack for BioSQL Bug 2839
 
@@ -51,25 +47,12 @@ def open_database(driver="MySQLdb", **kwargs):
             "Using BioSQL with psycopg (version one) is no "
             "longer supported. Use psycopg2 instead."
         )
-
-    if os.name == "java":
-        from com.ziclix.python.sql import zxJDBC
-
-        module = zxJDBC
-        if driver in ["MySQLdb"]:
-            jdbc_driver = "com.mysql.jdbc.Driver"
-            url_pref = "jdbc:mysql://" + kwargs["host"] + "/"
-        elif driver in ["psycopg2"]:
-            jdbc_driver = "org.postgresql.Driver"
-            url_pref = "jdbc:postgresql://" + kwargs["host"] + "/"
-
-    else:
-        module = __import__(driver, fromlist=["connect"])
+    module = __import__(driver, fromlist=["connect"])
     connect = module.connect
 
     # Different drivers use different keywords...
     kw = kwargs.copy()
-    if driver in ["MySQLdb", "mysql.connector"] and os.name != "java":
+    if driver in ["MySQLdb", "mysql.connector"]:
         if "database" in kw:
             kw["db"] = kw["database"]
             del kw["database"]
@@ -89,30 +72,12 @@ def open_database(driver="MySQLdb", **kwargs):
     if driver in ["psycopg2", "pgdb"] and not kw.get("database"):
         kw["database"] = "template1"
     # SQLite connect takes the database name as input
-    if os.name == "java":
-        if driver in ["MySQLdb"]:
-            conn = connect(
-                url_pref + kw.get("database", "mysql"),
-                kw["user"],
-                kw["password"],
-                jdbc_driver,
-            )
-        elif driver in ["psycopg2"]:
-            conn = connect(
-                url_pref + kw.get("database", "postgresql") + "?stringtype=unspecified",
-                kw["user"],
-                kw["password"],
-                jdbc_driver,
-            )
-    elif driver in ["sqlite3"]:
+    if driver in ["sqlite3"]:
         conn = connect(kw["database"])
     else:
         conn = connect(**kw)
 
-    if os.name == "java":
-        server = DBServer(conn, module, driver)
-    else:
-        server = DBServer(conn, module)
+    server = DBServer(conn, module)
 
     # Sets MySQL to allow double quotes, rather than only backticks
     if driver in ["MySQLdb", "mysql.connector"]:
@@ -128,6 +93,7 @@ def open_database(driver="MySQLdb", **kwargs):
         )
         if server.adaptor.execute_and_fetchall(sql):
             import warnings
+
             from Bio import BiopythonWarning
 
             warnings.warn(
@@ -154,7 +120,7 @@ def open_database(driver="MySQLdb", **kwargs):
 
 
 class DBServer:
-    """Represents a BioSQL database continaing namespaces (sub-databases).
+    """Represents a BioSQL database containing namespaces (sub-databases).
 
     This acts like a Python dictionary, giving access to each namespace
     (defined by a row in the biodatabase table) as a BioSeqDatabase object.
@@ -187,7 +153,7 @@ class DBServer:
 
     def __repr__(self):
         """Return a short description of the class name and database connection."""
-        return self.__class__.__name__ + "(%r)" % self.adaptor.conn
+        return f"{self.__class__.__name__}({self.adaptor.conn!r})"
 
     def __getitem__(self, name):
         """Return a BioSeqDatabase object.
@@ -235,36 +201,11 @@ class DBServer:
         remover = Loader.DatabaseRemover(self.adaptor, db_id)
         remover.remove()
 
-    def remove_database(self, db_name):
-        """Remove a namespace and all its entries (OBSOLETE).
-
-        Examples
-        --------
-        Try to remove all references to items in a database::
-
-            server.remove_database(name)
-
-        In keeping with the dictionary interface, you can now do this::
-
-            del server[name]
-
-        """
-        import warnings
-
-        warnings.warn(
-            "This method is deprecated.  In keeping with the "
-            "dictionary interface, you can now use 'del "
-            "server[name]' instead",
-            BiopythonDeprecationWarning,
-        )
-        self.__delitem__(db_name)
-
     def new_database(self, db_name, authority=None, description=None):
         """Add a new database to the server and return it."""
         # make the database
         sql = (
-            "INSERT INTO biodatabase (name, authority, description)"
-            " VALUES (%s, %s, %s)"
+            "INSERT INTO biodatabase (name, authority, description) VALUES (%s, %s, %s)"
         )
         self.adaptor.execute(sql, (db_name, authority, description))
         return BioSeqDatabase(self.adaptor, db_name)
@@ -305,9 +246,7 @@ class DBServer:
             for sql_line in sql_parts[:-1]:
                 self.adaptor.cursor.execute(sql_line)
         else:
-            raise ValueError(
-                "Module %s not supported by the loader." % (self.module_name)
-            )
+            raise ValueError(f"Module {self.module_name} not supported by the loader.")
 
     def commit(self):
         """Commit the current transaction to the database."""
@@ -323,7 +262,7 @@ class DBServer:
 
 
 class _CursorWrapper:
-    """A wraper for mysql.connector resolving bytestring representations."""
+    """A wrapper for mysql.connector resolving bytestring representations."""
 
     def __init__(self, real_cursor):
         self.real_cursor = real_cursor
@@ -340,7 +279,7 @@ class _CursorWrapper:
         """Decode any bytestrings present in the row (PRIVATE)."""
         tuple_list = list(tuple_)
         for i, elem in enumerate(tuple_list):
-            if type(elem) is bytes:
+            if isinstance(elem, bytes):
                 tuple_list[i] = elem.decode("utf-8")
         return tuple(tuple_list)
 
@@ -411,7 +350,7 @@ class Adaptor:
         )
         rv = self.cursor.fetchall()
         if not rv:
-            raise KeyError("Cannot find biodatabase with name %r" % dbname)
+            raise KeyError(f"Cannot find biodatabase with name {dbname!r}")
         return rv[0][0]
 
     def fetch_seqid_by_display_id(self, dbid, name):
@@ -431,9 +370,9 @@ class Adaptor:
         self.execute(sql, fields)
         rv = self.cursor.fetchall()
         if not rv:
-            raise IndexError("Cannot find display id %r" % name)
+            raise IndexError(f"Cannot find display id {name!r}")
         if len(rv) > 1:
-            raise IndexError("More than one entry with display id %r" % name)
+            raise IndexError(f"More than one entry with display id {name!r}")
         return rv[0][0]
 
     def fetch_seqid_by_accession(self, dbid, name):
@@ -453,9 +392,9 @@ class Adaptor:
         self.execute(sql, fields)
         rv = self.cursor.fetchall()
         if not rv:
-            raise IndexError("Cannot find accession %r" % name)
+            raise IndexError(f"Cannot find accession {name!r}")
         if len(rv) > 1:
-            raise IndexError("More than one entry with accession %r" % name)
+            raise IndexError(f"More than one entry with accession {name!r}")
         return rv[0][0]
 
     def fetch_seqids_by_accession(self, dbid, name):
@@ -485,7 +424,7 @@ class Adaptor:
         """
         acc_version = name.split(".")
         if len(acc_version) > 2:
-            raise IndexError("Bad version %r" % name)
+            raise IndexError(f"Bad version {name!r}")
         acc = acc_version[0]
         if len(acc_version) == 2:
             version = acc_version[1]
@@ -499,9 +438,9 @@ class Adaptor:
         self.execute(sql, fields)
         rv = self.cursor.fetchall()
         if not rv:
-            raise IndexError("Cannot find version %r" % name)
+            raise IndexError(f"Cannot find version {name!r}")
         if len(rv) > 1:
-            raise IndexError("More than one entry with version %r" % name)
+            raise IndexError(f"More than one entry with version {name!r}")
         return rv[0][0]
 
     def fetch_seqid_by_identifier(self, dbid, identifier):
@@ -522,7 +461,7 @@ class Adaptor:
         self.execute(sql, fields)
         rv = self.cursor.fetchall()
         if not rv:
-            raise IndexError("Cannot find display id %r" % identifier)
+            raise IndexError(f"Cannot find display id {identifier!r}")
         return rv[0][0]
 
     def list_biodatabase_names(self):
@@ -564,19 +503,16 @@ class Adaptor:
         """Execute sql that returns 1 record, and return the record."""
         self.execute(sql, args or ())
         rv = self.cursor.fetchall()
-        assert len(rv) == 1, "Expected 1 response, got %d" % len(rv)
+        if len(rv) != 1:
+            raise ValueError(f"Expected 1 response, got {len(rv)}.")
         return rv[0]
 
     def execute(self, sql, args=None):
         """Just execute an sql command."""
-        if os.name == "java":
-            sql = sql.replace("%s", "?")
         self.dbutils.execute(self.cursor, sql, args)
 
     def executemany(self, sql, args):
         """Execute many sql commands."""
-        if os.name == "java":
-            sql = sql.replace("%s", "?")
         self.dbutils.executemany(self.cursor, sql, args)
 
     def get_subseq_as_string(self, seqid, start, end):
@@ -683,7 +619,7 @@ class BioSeqDatabase:
 
     def __repr__(self):
         """Return a short summary of the BioSeqDatabase."""
-        return "BioSeqDatabase(%r, %r)" % (self.adaptor, self.name)
+        return f"BioSeqDatabase({self.adaptor!r}, {self.name!r})"
 
     def get_Seq_by_id(self, name):
         """Get a DBSeqRecord object by its name.
@@ -691,7 +627,7 @@ class BioSeqDatabase:
         Example: seq_rec = db.get_Seq_by_id('ROA1_HUMAN')
 
         The name of this method is misleading since it returns a DBSeqRecord
-        rather than a DBSeq ojbect, and presumably was to mirror BioPerl.
+        rather than a Seq object, and presumably was to mirror BioPerl.
         """
         seqid = self.adaptor.fetch_seqid_by_display_id(self.dbid, name)
         return BioSeq.DBSeqRecord(self.adaptor, seqid)
@@ -702,7 +638,7 @@ class BioSeqDatabase:
         Example: seq_rec = db.get_Seq_by_acc('X77802')
 
         The name of this method is misleading since it returns a DBSeqRecord
-        rather than a DBSeq ojbect, and presumably was to mirror BioPerl.
+        rather than a Seq object, and presumably was to mirror BioPerl.
         """
         seqid = self.adaptor.fetch_seqid_by_accession(self.dbid, name)
         return BioSeq.DBSeqRecord(self.adaptor, seqid)
@@ -713,7 +649,7 @@ class BioSeqDatabase:
         Example: seq_rec = db.get_Seq_by_ver('X77802.1')
 
         The name of this method is misleading since it returns a DBSeqRecord
-        rather than a DBSeq ojbect, and presumably was to mirror BioPerl.
+        rather than a Seq object, and presumably was to mirror BioPerl.
         """
         seqid = self.adaptor.fetch_seqid_by_version(self.dbid, name)
         return BioSeq.DBSeqRecord(self.adaptor, seqid)
@@ -724,29 +660,11 @@ class BioSeqDatabase:
         Example: seq_recs = db.get_Seq_by_acc('X77802')
 
         The name of this method is misleading since it returns a list of
-        DBSeqRecord objects rather than a list of DBSeq ojbects, and presumably
+        DBSeqRecord objects rather than a list of Seq objects, and presumably
         was to mirror BioPerl.
         """
         seqids = self.adaptor.fetch_seqids_by_accession(self.dbid, name)
         return [BioSeq.DBSeqRecord(self.adaptor, seqid) for seqid in seqids]
-
-    def get_all_primary_ids(self):
-        """All the primary_ids of the sequences in the database (OBSOLETE).
-
-        These maybe ids (display style) or accession numbers or
-        something else completely different - they *are not*
-        meaningful outside of this database implementation.
-
-        Please use .keys() instead of .get_all_primary_ids()
-        """
-        import warnings
-
-        warnings.warn(
-            "Use bio_seq_database.keys() instead of "
-            "bio_seq_database.get_all_primary_ids()",
-            BiopythonDeprecationWarning,
-        )
-        return list(self.keys())
 
     def __getitem__(self, key):
         """Return a DBSeqRecord for one of the sequences in the sub-database.
@@ -757,14 +675,14 @@ class BioSeqDatabase:
         """
         record = BioSeq.DBSeqRecord(self.adaptor, key)
         if record._biodatabase_id != self.dbid:
-            raise KeyError("Entry %r does exist, but not in current name space" % key)
+            raise KeyError(f"Entry {key!r} does exist, but not in current name space")
         return record
 
     def __delitem__(self, key):
         """Remove an entry and all its annotation."""
         if key not in self:
             raise KeyError(
-                "Entry %r cannot be deleted. It was not found or is invalid" % key
+                f"Entry {key!r} cannot be deleted. It was not found or is invalid"
             )
         # Assuming this will automatically cascade to the other tables...
         sql = "DELETE FROM bioentry WHERE biodatabase_id=%s AND bioentry_id=%s;"
@@ -823,30 +741,12 @@ class BioSeqDatabase:
         k, v = list(kwargs.items())[0]
         if k not in _allowed_lookups:
             raise TypeError(
-                "lookup() expects one of %r, not %r"
-                % (list(_allowed_lookups.keys()), k)
+                f"lookup() expects one of {list(_allowed_lookups.keys())!r}, not {k!r}"
             )
         lookup_name = _allowed_lookups[k]
         lookup_func = getattr(self.adaptor, lookup_name)
         seqid = lookup_func(self.dbid, v)
         return BioSeq.DBSeqRecord(self.adaptor, seqid)
-
-    def get_Seq_by_primary_id(self, seqid):
-        """Get a DBSeqRecord by the primary (internal) id (OBSOLETE).
-
-        Rather than db.get_Seq_by_primary_id(my_id) use db[my_id]
-
-        The name of this method is misleading since it returns a DBSeqRecord
-        rather than a DBSeq ojbect, and presumably was to mirror BioPerl.
-        """
-        import warnings
-
-        warnings.warn(
-            "Use bio_seq_database[my_id] instead of "
-            "bio_seq_database.get_Seq_by_primary_id(my_id)",
-            BiopythonDeprecationWarning,
-        )
-        return self[seqid]
 
     def load(self, record_iterator, fetch_NCBI_taxonomy=False):
         """Load a set of SeqRecords into the BioSQL database.
@@ -870,7 +770,6 @@ class BioSeqDatabase:
         """
         db_loader = Loader.DatabaseLoader(self.adaptor, self.dbid, fetch_NCBI_taxonomy)
         num_records = 0
-        global _POSTGRES_RULES_PRESENT
         for cur_record in record_iterator:
             num_records += 1
             # Hack to work around BioSQL Bug 2839 - If using PostgreSQL and

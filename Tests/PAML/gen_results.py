@@ -5,10 +5,8 @@
 
 """Generate output for PAML tests."""
 
-
 import os.path
 import sys
-
 
 VERSIONS = ["4_1", "4_3", "4_4", "4_4c", "4_5", "4_6", "4_7", "4_8", "4_9a", "4_9i"]
 
@@ -65,7 +63,7 @@ def baseml(vers=None, verbose=False):
     else:
         versions = VERSIONS
     tests = [
-        ("model", list(range(0, 9))),
+        ("model", list(range(9))),
         ("nhomo", [1, 3, 4]),
         ("nparK", list(range(1, 5))),
         ("alpha1rho1", None),
@@ -133,21 +131,19 @@ def yn00(vers=None, verbose=False):
 
 def print_usage():
     versions = ", ".join(vers.replace("_", ".") for vers in VERSIONS)
-    usage = """Usage: gen_results.py [-v] PROGRAM [VERSION]
+    usage = f"""Usage: gen_results.py [-v] PROGRAM [VERSION]
 
 Generate result files to be used in Bio.Phylo.PAML unit tests.
 
   -v         Use verbose output
   PROGRAM    codeml, baseml or yn00
-  VERSION    %s
+  VERSION    {versions}
 
 To use this, the PAML programs must be in your executable path and
 they must be named programX_Y, where X and Y are the version numbers
 (i.e. baseml4_5 or codeml4_4c). If VERSION is not specified, test
 results will be generated for all versions listed above.
-""" % (
-        versions
-    )
+"""
     sys.exit(usage)
 
 

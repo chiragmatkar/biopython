@@ -17,20 +17,17 @@ A PDB file can be written out with the exposure in the B factor field.
 See --help for all args.
 """
 
-
 import argparse
 import sys
 
-from Bio.PDB import (
-    DSSP,
-    ExposureCN,
-    HSExposureCA,
-    HSExposureCB,
-    PDBParser,
-    PDBIO,
-    ResidueDepth,
-    Selection,
-)
+from Bio.PDB import DSSP
+from Bio.PDB import ExposureCN
+from Bio.PDB import HSExposureCA
+from Bio.PDB import HSExposureCB
+from Bio.PDB import PDBIO
+from Bio.PDB import PDBParser
+from Bio.PDB import ResidueDepth
+from Bio.PDB import Selection
 
 ap = argparse.ArgumentParser(description=__doc__)
 ap.add_argument("pdbfile", help="Input structure in PDB format.")
@@ -43,7 +40,7 @@ ap.add_argument(
     default="HSEb",
 )
 ap.add_argument(
-    "-o", "--out", dest="outfile", help="output to PDB file (B factor=exposure)",
+    "-o", "--out", dest="outfile", help="output to PDB file (B factor=exposure)"
 )
 ap.add_argument(
     "-r",
@@ -91,9 +88,9 @@ elif args.exp[0] == "H" and args.exp[3] == "B":
     hse = HSExposureCB(m, RADIUS)
     # hse.write_pymol_script()
     if args.exp[-1] == "D":
-        k = "EXP_HSE_B_U"
-    else:
         k = "EXP_HSE_B_D"
+    else:
+        k = "EXP_HSE_B_U"
 elif args.exp == "CN":
     hse = ExposureCN(m, RADIUS)
     k = "EXP_CN"
@@ -123,9 +120,7 @@ else:
 residue_list = Selection.unfold_entities(m, "R")
 
 for r in residue_list:
-
     if k in r.xtra:
-
         exposure = r.xtra[k]
 
         if args.exp == "DSSPR":

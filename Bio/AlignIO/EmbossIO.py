@@ -13,11 +13,10 @@ This module contains a parser for the EMBOSS pairs/simple file format, for
 example from the alignret, water and needle tools.
 """
 
-
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from Bio.AlignIO.Interfaces import AlignmentIterator
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 
 
 class EmbossIterator(AlignmentIterator):
@@ -100,7 +99,7 @@ class EmbossIterator(AlignmentIterator):
                 % (number_of_seqs, self.records_per_alignment)
             )
 
-        seqs = ["" for id in ids]
+        seqs = [""] * len(ids)
         seq_starts = []
         index = 0
 
@@ -177,13 +176,13 @@ class EmbossIterator(AlignmentIterator):
                         index = 0
                 else:
                     # just a start value, this is just alignment annotation (?)
-                    # print "Skipping: " + line.rstrip()
+                    # print("Skipping: " + line.rstrip())
                     pass
             elif line.strip() == "":
                 # Just a spacer?
                 pass
             else:
-                raise ValueError("Unrecognised EMBOSS pairwise line: %r\n" % line)
+                raise ValueError(f"Unrecognised EMBOSS pairwise line: {line!r}\n")
 
             line = handle.readline()
             if (

@@ -18,7 +18,7 @@ breaking the general drawing capabilities of the system. The
 relationship between classes is that everything derives from
 _ChromosomeComponent, which specifies the overall interface. The parts
 then are related so that an Organism contains Chromosomes, and these
-Chromosomes contain ChromosomeSegments. This representation differents
+Chromosomes contain ChromosomeSegments. This representation differs
 from the canonical composite structure in that we don't really have
 'leaf' nodes here -- all components can potentially hold sub-components.
 
@@ -33,18 +33,20 @@ This provides nice output in PDF, SVG and postscript.  If you have
 reportlab's renderPM module installed you can also use PNG etc.
 """
 
-# reportlab
+from reportlab.graphics.shapes import ArcPath
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.shapes import Line
+from reportlab.graphics.shapes import Rect
+from reportlab.graphics.shapes import String
+from reportlab.graphics.shapes import Wedge
+from reportlab.graphics.widgetbase import Widget
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.lib import colors
 from reportlab.pdfbase.pdfmetrics import stringWidth
-
-from reportlab.graphics.shapes import Drawing, String, Line, Rect, Wedge, ArcPath
-from reportlab.graphics.widgetbase import Widget
 
 from Bio.Graphics import _write
 from Bio.Graphics.GenomeDiagram import _Colors
-
 
 _color_trans = _Colors.ColorTranslator()
 
@@ -70,9 +72,7 @@ class _ChromosomeComponent(Widget):
     def add(self, component):
         """Add a sub_component to the list of components under this item."""
         if not isinstance(component, _ChromosomeComponent):
-            raise TypeError(
-                "Expected a _ChromosomeComponent object, got %s" % component
-            )
+            raise TypeError(f"Expected a _ChromosomeComponent object, got {component}")
 
         self._sub_components.append(component)
 
@@ -86,7 +86,7 @@ class _ChromosomeComponent(Widget):
             self._sub_components.remove(component)
         except ValueError:
             raise ValueError(
-                "Component %s not found in sub_components." % component
+                f"Component {component} not found in sub_components."
             ) from None
 
     def draw(self):
@@ -97,7 +97,7 @@ class _ChromosomeComponent(Widget):
 class Organism(_ChromosomeComponent):
     """Top level class for drawing chromosomes.
 
-    This class holds information about an organism and all of it's
+    This class holds information about an organism and all of its
     chromosomes, and provides the top level object which could be used
     for drawing a chromosome representation of an organism.
 
@@ -106,7 +106,7 @@ class Organism(_ChromosomeComponent):
     """
 
     def __init__(self, output_format="pdf"):
-        """Initialize."""
+        """Initialize the class."""
         _ChromosomeComponent.__init__(self)
 
         # customizable attributes
@@ -180,7 +180,6 @@ class Organism(_ChromosomeComponent):
         Subclasses should implement this (see also self._legend_height) to
         provide specialized legends.
         """
-        pass
 
 
 class Chromosome(_ChromosomeComponent):
@@ -209,7 +208,7 @@ class Chromosome(_ChromosomeComponent):
          - scale_num - A number of scale the drawing by. This is useful if
            you want to draw multiple chromosomes of different sizes at the
            same scale. If this is not set, then the chromosome drawing will
-           be scaled by the number of segements in the chromosome (so each
+           be scaled by the number of segments in the chromosome (so each
            chromosome will be the exact same final size).
 
         """
@@ -325,11 +324,11 @@ class Chromosome(_ChromosomeComponent):
             self.end_x_position - self.start_x_position - segment_width
         )
 
-        y_limits = []
-        for sub_component in self._sub_components:
-            y_limits.extend(
-                (sub_component.start_y_position, sub_component.end_y_position)
-            )
+        y_limits = [
+            limit
+            for sub_component in self._sub_components
+            for limit in (sub_component.start_y_position, sub_component.end_y_position)
+        ]
         y_min = min(y_limits)
         y_max = max(y_limits)
         del y_limits
@@ -352,7 +351,7 @@ class Chromosome(_ChromosomeComponent):
                 "start",
             ),
         ]:
-            for (y1, y2, color, back_color, name) in labels:
+            for y1, y2, color, back_color, name in labels:
                 cur_drawing.add(
                     Line(x1, y1, x2, y2, strokeColor=color, strokeWidth=0.25)
                 )
@@ -447,7 +446,6 @@ class ChromosomeSegment(_ChromosomeComponent):
         This should be overridden in derived classes if there are
         subcomponents to be drawn.
         """
-        pass
 
     def _draw_segment(self, cur_drawing):
         """Draw the current chromosome segment (PRIVATE)."""
@@ -486,7 +484,6 @@ class ChromosomeSegment(_ChromosomeComponent):
         This should be overridden in derived classes if there are
         subcomponents to be drawn.
         """
-        pass
 
     def _draw_label(self, cur_drawing):
         """Add a label to the chromosome segment (PRIVATE).
@@ -496,7 +493,6 @@ class ChromosomeSegment(_ChromosomeComponent):
         This may be overlapped by any sub-feature labels on other segments!
         """
         if self.label is not None:
-
             label_x = 0.5 * (self.start_x_position + self.end_x_position) + (
                 self.chr_percent + 0.05
             ) * (self.end_x_position - self.start_x_position)
@@ -512,10 +508,10 @@ class ChromosomeSegment(_ChromosomeComponent):
 
 
 def _spring_layout(desired, minimum, maximum, gap=0):
-    """Try to layout label co-ordinates or other floats (PRIVATE).
+    """Try to layout label coordinates or other floats (PRIVATE).
 
     Originally written for the y-axis vertical positioning of labels on a
-    chromosome diagram (where the minimum gap between y-axis co-ordinates is
+    chromosome diagram (where the minimum gap between y-axis coordinates is
     the label height), it could also potentially be used for x-axis placement,
     or indeed radial placement for circular chromosomes within GenomeDiagram.
 
@@ -534,16 +530,17 @@ def _spring_layout(desired, minimum, maximum, gap=0):
     if count <= 1:
         return desired  # Easy!
     if minimum >= maximum:
-        raise ValueError("Bad min/max %f and %f" % (minimum, maximum))
+        raise ValueError(f"Bad min/max {minimum:f} and {maximum:f}")
     if min(desired) < minimum or max(desired) > maximum:
         raise ValueError(
             "Data %f to %f out of bounds (%f to %f)"
             % (min(desired), max(desired), minimum, maximum)
         )
-    equal_step = float(maximum - minimum) / (count - 1)
+    equal_step = (maximum - minimum) / (count - 1)
 
     if equal_step < gap:
         import warnings
+
         from Bio import BiopythonWarning
 
         warnings.warn("Too many labels to avoid overlap", BiopythonWarning)
@@ -641,13 +638,13 @@ class AnnotatedChromosomeSegment(ChromosomeSegment):
         ReportLab color (string or object), and optional ReportLab fill color.
 
         Note we require 0 <= start <= end <= bp_length, and within the vertical
-        space allocated to this segmenet lines will be places according to the
+        space allocated to this segment lines will be places according to the
         start/end coordinates (starting from the top).
 
         Positive stand features are drawn on the right, negative on the left,
         otherwise all the way across.
 
-        We recommend using consisent units for all the segment's scale values
+        We recommend using consistent units for all the segment's scale values
         (e.g. their length in base pairs).
 
         When providing features as SeqFeature objects, the default color
@@ -693,7 +690,7 @@ class AnnotatedChromosomeSegment(ChromosomeSegment):
                 # Assume SeqFeature objects
                 start = f.location.start
                 end = f.location.end
-                strand = f.strand
+                strand = f.location.strand
                 try:
                     # Handles Artemis colour integers, HTML colors, etc
                     color = _color_trans.translate(f.qualifiers["color"][0])
@@ -820,4 +817,3 @@ class SpacerSegment(ChromosomeSegment):
         so this method therefore does nothing, but is defined
         to match the expected API of the other segment objects.
         """
-        pass

@@ -6,7 +6,6 @@
 # package.
 """Information about the IUPAC alphabets."""
 
-
 protein_letters = "ACDEFGHIKLMNPQRSTVWY"
 extended_protein_letters = "ACDEFGHIKLMNPQRSTVWYBXZJUO"
 #   B = "Asx";  aspartic acid or asparagine (D or N)
@@ -53,16 +52,14 @@ protein_letters_1to3 = {
     "W": "Trp",
     "Y": "Tyr",
 }
-protein_letters_1to3_extended = dict(
-    list(protein_letters_1to3.items())
-    + list(
-        {"B": "Asx", "X": "Xaa", "Z": "Glx", "J": "Xle", "U": "Sec", "O": "Pyl"}.items()
-    )
-)
+protein_letters_1to3_extended = {
+    **protein_letters_1to3,
+    **{"B": "Asx", "X": "Xaa", "Z": "Glx", "J": "Xle", "U": "Sec", "O": "Pyl"},
+}
 
-protein_letters_3to1 = {x[1]: x[0] for x in protein_letters_1to3.items()}
+protein_letters_3to1 = {value: key for key, value in protein_letters_1to3.items()}
 protein_letters_3to1_extended = {
-    x[1]: x[0] for x in protein_letters_1to3_extended.items()
+    value: key for key, value in protein_letters_1to3_extended.items()
 }
 
 ambiguous_dna_letters = "GATCRYWSMKHBVDN"

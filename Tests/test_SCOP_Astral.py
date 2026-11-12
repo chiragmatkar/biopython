@@ -7,7 +7,8 @@
 
 import unittest
 
-from Bio.SCOP import Astral, Scop
+from Bio.SCOP import Astral
+from Bio.SCOP import Scop
 
 
 class AstralTests(unittest.TestCase):
@@ -16,19 +17,19 @@ class AstralTests(unittest.TestCase):
         self.astral = Astral(scop=self.scop, dir_path="SCOP", version="test")
 
     def testGetSeq(self):
-        self.assertEqual(str(self.astral.getSeqBySid("d3sdha_")), "AAAAA")
-        self.assertEqual(str(self.astral.getSeqBySid("d4hbib_")), "KKKKK")
+        self.assertEqual(self.astral.getSeqBySid("d3sdha_"), "AAAAA")
+        self.assertEqual(self.astral.getSeqBySid("d4hbib_"), "KKKKK")
 
         dom = self.scop.getDomainBySid("d3sdha_")
-        self.assertEqual(str(self.astral.getSeq(dom)), "AAAAA")
+        self.assertEqual(self.astral.getSeq(dom), "AAAAA")
 
     def testConstructWithCustomFile(self):
         scop = Scop(dir_path="SCOP", version="test")
         astral = Astral(
             scop=scop, astral_file="SCOP/scopseq-test/astral-scopdom-seqres-all-test.fa"
         )
-        self.assertEqual(str(astral.getSeqBySid("d3sdha_")), "AAAAA")
-        self.assertEqual(str(astral.getSeqBySid("d4hbib_")), "KKKKK")
+        self.assertEqual(astral.getSeqBySid("d3sdha_"), "AAAAA")
+        self.assertEqual(astral.getSeqBySid("d4hbib_"), "KKKKK")
 
     def testGetDomainsFromFile(self):
         filename = "SCOP/scopseq-test/astral-scopdom-seqres-sel-gs-bib-20-test.id"

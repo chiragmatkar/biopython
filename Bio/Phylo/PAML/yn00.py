@@ -5,23 +5,24 @@
 # Please see the LICENSE file that should have been included as part of this
 # package.
 
-"""Classes for the support of yn00.
+"""Classes for the support of YN00.
 
 Yang and Nielsen 2000,  estimating synonymous and nonsynonymous substitution
 rates in pairwise comparison of protein-coding DNA sequences.
 """
 
 import os.path
-from ._paml import Paml
+
 from . import _parse_yn00
+from ._paml import Paml
 
 
 class Yn00Error(EnvironmentError):
-    """yn00 failed. Run with verbose=True to view yn00's error message."""
+    """YN00 failed. Run with verbose=True to view YN00's error message."""
 
 
 class Yn00(Paml):
-    """An interface to yn00, part of the PAML package."""
+    """An interface to YN00, part of the PAML package."""
 
     def __init__(self, alignment=None, working_dir=None, out_file=None):
         """Initialize the Yn00 instance.
@@ -41,29 +42,34 @@ class Yn00(Paml):
         }
 
     def write_ctl_file(self):
-        """Dynamically build a yn00 control file from the options.
+        """Dynamically build a YN00 control file from the options.
 
         The control file is written to the location specified by the
-        ctl_file property of the yn00 class.
+        ctl_file property of the Yn00 class.
         """
         # Make sure all paths are relative to the working directory
         self._set_rel_paths()
         with open(self.ctl_file, "w") as ctl_handle:
-            ctl_handle.write("seqfile = %s\n" % self._rel_alignment)
-            ctl_handle.write("outfile = %s\n" % self._rel_out_file)
+            ctl_handle.write(f"seqfile = {self._rel_alignment}\n")
+            ctl_handle.write(f"outfile = {self._rel_out_file}\n")
             for option in self._options.items():
                 if option[1] is None:
                     # If an option has a value of None, there's no need
                     # to write it in the control file; it's normally just
                     # commented out.
                     continue
-                ctl_handle.write("%s = %s\n" % (option[0], option[1]))
+                ctl_handle.write(f"{option[0]} = {option[1]}\n")
 
     def read_ctl_file(self, ctl_file):
-        """Parse a control file and load the options into the yn00 instance."""
+        """Parse a control file and load the options into the Yn00 instance.
+
+        Update each YN00 option to the new option if supplied or None if
+        not supplied. Raise an exception if the control file does not exist,
+        a line is malformed, or an option is invalid.
+        """
         temp_options = {}
         if not os.path.isfile(ctl_file):
-            raise FileNotFoundError("File not found: %r" % ctl_file)
+            raise FileNotFoundError(f"File not found: {ctl_file!r}")
         else:
             with open(ctl_file) as ctl_handle:
                 for line in ctl_handle:
@@ -72,7 +78,7 @@ class Yn00(Paml):
                     if uncommented != "":
                         if "=" not in uncommented:
                             raise AttributeError(
-                                "Malformed line in control file:\n%r" % line
+                                f"Malformed line in control file:\n{line!r}"
                             )
                         (option, value) = uncommented.split("=")
                         option = option.strip()
@@ -82,7 +88,7 @@ class Yn00(Paml):
                         elif option == "outfile":
                             self.out_file = value
                         elif option not in self._options:
-                            raise KeyError("Invalid option: %s" % option)
+                            raise KeyError(f"Invalid option: {option}")
                         else:
                             if "." in value or "e-" in value:
                                 try:
@@ -102,10 +108,11 @@ class Yn00(Paml):
                 self._options[option] = None
 
     def run(self, ctl_file=None, verbose=False, command="yn00", parse=True):
-        """Run yn00 using the current configuration.
+        """Run ``yn00`` using the current configuration.
 
         If parse is True then read and return the result, otherwise
-        return None.
+        return None. An exception is raised if the return code of
+        the ``yn00`` command is non-zero.
         """
         Paml.run(self, ctl_file, verbose, command)
         if parse:
@@ -114,7 +121,11 @@ class Yn00(Paml):
 
 
 def read(results_file):
-    """Parse a yn00 results file."""
+    """Parse a YN00 results file.
+
+    Return the results if there are any. Raise an exception if
+    the results file does not exist, is empty, or is invalid.
+    """
     results = {}
     if not os.path.exists(results_file):
         raise FileNotFoundError("Results file does not exist.")

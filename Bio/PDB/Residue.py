@@ -7,11 +7,18 @@
 
 """Residue class, used by Structure objects."""
 
-# My Stuff
-import warnings
-from Bio import BiopythonDeprecationWarning
+from typing import TYPE_CHECKING
+from typing import TypeVar
+
+from Bio.PDB.Entity import DisorderedEntityWrapper
+from Bio.PDB.Entity import Entity
 from Bio.PDB.PDBExceptions import PDBConstructionException
-from Bio.PDB.Entity import Entity, DisorderedEntityWrapper
+
+if TYPE_CHECKING:
+    from Bio.PDB.Atom import Atom
+    from Bio.PDB.Chain import Chain
+
+_ResidueT = TypeVar("_ResidueT", bound="Residue")
 
 
 _atom_name_dict = {}
@@ -21,7 +28,7 @@ _atom_name_dict["C"] = 3
 _atom_name_dict["O"] = 4
 
 
-class Residue(Entity):
+class Residue(Entity["Chain", "Atom"]):
     """Represents a residue. A Residue object stores atoms."""
 
     def __init__(self, id, resname, segid):
@@ -40,6 +47,30 @@ class Residue(Entity):
         full_id = (resname, hetflag, resseq, icode)
         return "<Residue %s het=%s resseq=%s icode=%s>" % full_id
 
+    def strictly_equals(
+        self: _ResidueT, other: _ResidueT, compare_coordinates: bool = False
+    ) -> bool:
+        """Compare this residue to the other residue using a strict definition of equality.
+
+        The residues are equal if they have the same name, identifier,
+        and their constituent atoms are strictly equal.
+
+        :param other: The residue to compare this residue to
+        :type other: Residue
+        :param compare_coordinates: Whether to compare the coordinates of the atoms
+        :type compare_coordinates: bool
+        :return: Whether the residues are strictly equal
+        :rtype: bool
+        """
+        if not isinstance(other, type(self)):
+            return False
+
+        return (
+            self.resname == other.resname
+            and self.id == other.id
+            and Entity.strictly_equals(self, other, compare_coordinates)
+        )
+
     def add(self, atom):
         """Add an Atom object.
 
@@ -49,23 +80,9 @@ class Residue(Entity):
         atom_id = atom.get_id()
         if self.has_id(atom_id):
             raise PDBConstructionException(
-                "Atom %s defined twice in residue %s" % (atom_id, self)
+                f"Atom {atom_id} defined twice in residue {self}"
             )
         Entity.add(self, atom)
-
-    def sort(self):
-        """Sort child atoms.
-
-        Atoms N, CA, C, O always come first, thereafter alphabetically
-        by name, with any alternative location specifier for disordered
-        atoms (altloc) as a tie-breaker.
-        """
-        warnings.warn(
-            "The custom sort() method will be removed in the future in favour of rich "
-            "comparison methods. Use the built-in sorted() function instead.",
-            BiopythonDeprecationWarning,
-        )
-        self.child_list.sort()
 
     def flag_disordered(self):
         """Set the disordered flag."""
@@ -98,15 +115,6 @@ class Residue(Entity):
         """Return atoms."""
         yield from self
 
-    def get_atom(self):
-        """Return atom."""
-        warnings.warn(
-            "`get_atom` has been deprecated and we intend to remove it"
-            " in a future release of Biopython. Please use `get_atoms` instead.",
-            BiopythonDeprecationWarning,
-        )
-        yield from self
-
 
 class DisorderedResidue(DisorderedEntityWrapper):
     """DisorderedResidue is a wrapper around two or more Residue objects.
@@ -121,15 +129,18 @@ class DisorderedResidue(DisorderedEntityWrapper):
 
     def __repr__(self):
         """Return disordered residue full identifier."""
-        resname = self.get_resname()
-        hetflag, resseq, icode = self.get_id()
-        full_id = (resname, hetflag, resseq, icode)
-        return "<DisorderedResidue %s het=%s resseq=%i icode=%s>" % full_id
+        if self.child_dict:
+            resname = self.get_resname()
+            hetflag, resseq, icode = self.get_id()
+            full_id = (resname, hetflag, resseq, icode)
+            return "<DisorderedResidue %s het=%s resseq=%i icode=%s>" % full_id
+        else:
+            return "<Empty DisorderedResidue>"
 
     def add(self, atom):
         """Add atom to residue."""
         residue = self.disordered_get()
-        if not atom.is_disordered() == 2:
+        if atom.is_disordered() != 2:
             # Atoms in disordered residues should have non-blank
             # altlocs, and are thus represented by DisorderedAtom objects.
             resname = residue.get_resname()
@@ -161,3 +172,24 @@ class DisorderedResidue(DisorderedEntityWrapper):
         assert not self.disordered_has_id(resname)
         self[resname] = residue
         self.disordered_select(resname)
+
+    def disordered_remove(self, resname):
+        """Remove a child residue from the DisorderedResidue.
+
+        Arguments:
+         - resname - name of the child residue to remove, as a string.
+
+        """
+        # Get child residue
+        residue = self.child_dict[resname]
+        is_selected = self.selected_child is residue
+
+        # Detach
+        del self.child_dict[resname]
+        residue.detach_parent()
+
+        if is_selected and self.child_dict:  # pick another selected_child
+            child = next(iter(self.child_dict))
+            self.disordered_select(child)
+        elif not self.child_dict:  # no more children
+            self.selected_child = None

@@ -2,19 +2,19 @@
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
-
 """Tests for SeqIO PdbIO module."""
 
 import unittest
 import warnings
 
 try:
-    import numpy
+    import numpy as np
     from numpy import dot  # Missing on PyPy's micronumpy
 
     del dot
     # We don't need this (?) but Bio.PDB imports it automatically :(
-    from numpy.linalg import svd, det  # Missing in PyPy 2.0 numpypy
+    from numpy.linalg import det  # Missing in PyPy 2.0 numpypy
+    from numpy.linalg import svd  # Missing in PyPy 2.0 numpypy
 except ImportError:
     from Bio import MissingPythonDependencyError
 
@@ -22,8 +22,8 @@ except ImportError:
         "Install NumPy if you want to use PDB formats with SeqIO."
     ) from None
 
-from Bio import SeqIO
 from Bio import BiopythonParserWarning
+from Bio import SeqIO
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 
 
@@ -63,7 +63,7 @@ def SeqresTestGenerator(extension, parser):
             for chain, chn_id in zip(chains, "ABCDE"):
                 self.assertEqual(chain.id, "2BEG:" + chn_id)
                 self.assertEqual(chain.annotations["chain"], chn_id)
-                self.assertEqual(str(chain.seq), actual_seq)
+                self.assertEqual(chain.seq, actual_seq)
 
         def test_seqres_read(self):
             """Read a single-chain structure by sequence entries.
@@ -75,7 +75,7 @@ def SeqresTestGenerator(extension, parser):
             self.assertEqual(chain.id, "1A8O:A")
             self.assertEqual(chain.annotations["chain"], "A")
             self.assertEqual(
-                str(chain.seq),
+                chain.seq,
                 "MDIRQGPKEPFRDYVDRFYKTLRAEQASQEVKNWMTETLLVQNANPD"
                 "CKTILKALGPGATLEEMMTACQG",
             )
@@ -91,13 +91,9 @@ def SeqresTestGenerator(extension, parser):
 class TestPdbSeqres(SeqresTestGenerator("pdb", "pdb-seqres")):
     """Test pdb-seqres SeqIO driver."""
 
-    pass
-
 
 class TestCifSeqres(SeqresTestGenerator("cif", "cif-seqres")):
     """Test cif-seqres SeqIO driver."""
-
-    pass
 
 
 def AtomTestGenerator(extension, parser):
@@ -120,7 +116,7 @@ def AtomTestGenerator(extension, parser):
                 self.assertEqual(chain.id, "2BEG:" + chn_id)
                 self.assertEqual(chain.annotations["chain"], chn_id)
                 self.assertEqual(chain.annotations["model"], 0)
-                self.assertEqual(str(chain.seq), actual_seq)
+                self.assertEqual(chain.seq, actual_seq)
 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", PDBConstructionWarning)
@@ -133,7 +129,7 @@ def AtomTestGenerator(extension, parser):
                 "XXXXXXXXNEIRDRHKDIQQLERSLLELHEMFTDMSTLVASQGEMIDRIE"
                 "FSVEQSHNYV"
             )
-            self.assertEqual(str(chains[1].seq), actual_seq)
+            self.assertEqual(chains[1].seq, actual_seq)
 
         def test_atom_read(self):
             """Read a single-chain structure by ATOM entries.
@@ -146,7 +142,7 @@ def AtomTestGenerator(extension, parser):
             self.assertEqual(chain.annotations["chain"], "A")
             self.assertEqual(chain.annotations["model"], 0)
             self.assertEqual(
-                str(chain.seq),
+                chain.seq,
                 "MDIRQGPKEPFRDYVDRFYKTLRAEQASQEVKNWMTETLLVQNANPDCKTIL"
                 "KALGPGATLEEMMTACQG",
             )
@@ -166,7 +162,7 @@ class TestPdbAtom(AtomTestGenerator("pdb", "pdb-atom")):
 
         self.assertEqual(len(chains), 1)
         self.assertEqual(
-            str(chains[0].seq), "MKPVTLYDVAEYAGVSYQTVSRVVNQASHVSAKTREKVEAAMAELNYIPNR"
+            chains[0].seq, "MKPVTLYDVAEYAGVSYQTVSRVVNQASHVSAKTREKVEAAMAELNYIPNR"
         )
 
     def test_atom_read_noheader(self):
@@ -177,12 +173,12 @@ class TestPdbAtom(AtomTestGenerator("pdb", "pdb-atom")):
             chain = SeqIO.read("PDB/a_structure.pdb", "pdb-atom")
         self.assertEqual(chain.id, "????:A")
         self.assertEqual(chain.annotations["chain"], "A")
-        self.assertEqual(str(chain.seq), "E")
+        self.assertEqual(chain.seq, "Q")
 
     def test_atom_with_insertion(self):
         """Read a PDB with residue insertion code."""
         chain = SeqIO.read("PDB/2n0n_M1.pdb", "pdb-atom")
-        self.assertEqual(str(chain.seq), "HAEGKFTSEF")
+        self.assertEqual(chain.seq, "HAEGKFTSEF")
 
 
 class TestCifAtom(AtomTestGenerator("cif", "cif-atom")):
@@ -197,7 +193,7 @@ class TestCifAtom(AtomTestGenerator("cif", "cif-atom")):
         self.assertEqual(chain.id, "????:A")
         self.assertEqual(chain.annotations["chain"], "A")
         self.assertEqual(
-            str(chain.seq),
+            chain.seq,
             "MDIRQGPKEPFRDYVDRFYKTLRAEQASQEVKNWMTETLLVQNANPDCKTILKALGPGATLEEMMTACQG",
         )
 

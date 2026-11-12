@@ -32,13 +32,22 @@ Similarly, when writing to this format, Biopython will ONLY record the record's
 example above.
 """
 
+import warnings
+
+from Bio import BiopythonDeprecationWarning
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from .Interfaces import SequenceIterator, SequenceWriter, _clean, _get_seq_string
+
+from .Interfaces import _clean
+from .Interfaces import _get_seq_string
+from .Interfaces import SequenceIterator
+from .Interfaces import SequenceWriter
 
 
 class TabIterator(SequenceIterator):
     """Parser for tab-delimited files."""
+
+    modes = "t"
 
     def __init__(self, source):
         """Iterate over tab separated lines as SeqRecord objects.
@@ -71,16 +80,11 @@ class TabIterator(SequenceIterator):
         gi|45478721|ref|NP_995576.1| length 90
 
         """
-        super().__init__(source, mode="t", fmt="Tab-separated plain-text")
+        super().__init__(source, fmt="Tab-separated plain-text")
 
-    def parse(self, handle):
-        """Start parsing the file, and return a SeqRecord generator."""
-        records = self.iterate(handle)
-        return records
-
-    def iterate(self, handle):
-        """Parse the file and generate SeqRecord objects."""
-        for line in handle:
+    def __next__(self):
+        """Return the next SeqRecord from the tab-delimited stream."""
+        for line in self.stream:
             try:
                 title, seq = line.split("\t")  # will fail if more than one tab!
             except ValueError:
@@ -94,7 +98,8 @@ class TabIterator(SequenceIterator):
                 ) from None
             title = title.strip()
             seq = seq.strip()  # removes the trailing new line
-            yield SeqRecord(Seq(seq), id=title, name=title, description="")
+            return SeqRecord(Seq(seq), id=title, name=title, description="")
+        raise StopIteration
 
 
 class TabWriter(SequenceWriter):
@@ -105,29 +110,27 @@ class TabWriter(SequenceWriter):
     Any description, name or other annotation is not recorded.
 
     This class is not intended to be used directly. Instead, please use
-    the function ``as_tab``, or the top level ``Bio.SeqIO.write()`` function
-    with ``format="tab"``.
+    the top level ``Bio.SeqIO.write()`` function with ``format="tab"``.
     """
+
+    modes = "t"
+
+    @classmethod
+    def to_string(cls, record):
+        """Return record as tab separated (id(tab)seq) string."""
+        title = _clean(record.id)
+        seq = _get_seq_string(record)  # Catches sequence being None
+        assert "\t" not in title
+        assert "\n" not in title
+        assert "\r" not in title
+        assert "\t" not in seq
+        assert "\n" not in seq
+        assert "\r" not in seq
+        return f"{title}\t{seq}\n"
 
     def write_record(self, record):
         """Write a single tab line to the file."""
-        assert self._header_written
-        assert not self._footer_written
-        self._record_written = True
-        self.handle.write(as_tab(record))
-
-
-def as_tab(record):
-    """Return record as tab separated (id(tab)seq) string."""
-    title = _clean(record.id)
-    seq = _get_seq_string(record)  # Catches sequence being None
-    assert "\t" not in title
-    assert "\n" not in title
-    assert "\r" not in title
-    assert "\t" not in seq
-    assert "\n" not in seq
-    assert "\r" not in seq
-    return "%s\t%s\n" % (title, seq)
+        self.handle.write(self.to_string(record))
 
 
 if __name__ == "__main__":

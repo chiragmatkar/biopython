@@ -6,20 +6,18 @@
 """Bio.SearchIO objects to model high scoring regions between query and hit."""
 
 import warnings
-from operator import ge, le
+from operator import ge
+from operator import le
 
 from Bio import BiopythonWarning
 from Bio.Align import MultipleSeqAlignment
+from Bio.SearchIO._utils import allitems
+from Bio.SearchIO._utils import fragcascade
+from Bio.SearchIO._utils import fullcascade
+from Bio.SearchIO._utils import getattr_str
+from Bio.SearchIO._utils import singleitem
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-
-from Bio.SearchIO._utils import (
-    singleitem,
-    allitems,
-    fullcascade,
-    fragcascade,
-    getattr_str,
-)
 
 from ._base import _BaseHSP
 
@@ -185,7 +183,7 @@ class HSP(_BaseHSP):
     +----------------------+---------------------+-----------------------------+
 
     For all types of HSP objects, the property will return the values in a list.
-    Shorcuts are only applicable for HSPs with one fragment. Except the ones
+    Shortcuts are only applicable for HSPs with one fragment. Except the ones
     noted, if they are used on an HSP with more than one fragments, an exception
     will be raised.
 
@@ -773,11 +771,8 @@ class HSPFragment(_BaseHSP):
             # query or hit attributes whose default attribute is None
             for attr in ("strand", "frame", "start", "end"):
                 setattr(self, "%s_%s" % (seq_type, attr), None)
-            # self.query or self.hit
-            if eval(seq_type):
-                setattr(self, seq_type, eval(seq_type))
-            else:
-                setattr(self, seq_type, None)
+        self.query = query if query else None
+        self.hit = hit if hit else None
 
     def __repr__(self):
         """Return HSPFragment info; hit id, query id, number of columns."""
@@ -839,11 +834,11 @@ class HSPFragment(_BaseHSP):
         # sequences
         if self.query is not None and self.hit is not None:
             try:
-                qseq = str(self.query.seq)
+                qseq = self.query.seq
             except AttributeError:  # query is None
                 qseq = "?"
             try:
-                hseq = str(self.hit.seq)
+                hseq = self.hit.seq
             except AttributeError:  # hit is None
                 hseq = "?"
 

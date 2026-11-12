@@ -5,33 +5,32 @@
 
 import os
 import platform
-import unittest
 import tempfile
 import time
-
-from io import StringIO
+import unittest
 
 # Hide annoying warnings from things like bonds in GenBank features,
 # or PostgreSQL schema rules. TODO - test these warnings are raised!
 import warnings
+from io import StringIO
+
+import requires_internet
+from common_BioSQL import check_config
+from common_BioSQL import create_database
+from common_BioSQL import destroy_database
+
 from Bio import BiopythonWarning
+from Bio import Entrez
 
 # local stuff
 from Bio import MissingExternalDependencyError
-from Bio.Seq import Seq, MutableSeq
-from Bio.SeqFeature import SeqFeature
 from Bio import SeqIO
+from Bio.Seq import MutableSeq
+from Bio.Seq import Seq
+from Bio.SeqFeature import SeqFeature
 from Bio.SeqRecord import SeqRecord
-
-from BioSQL import BioSeqDatabase
 from BioSQL import BioSeq
-from Bio import Entrez
-
-from common_BioSQL import create_database, destroy_database, check_config
-
-from seq_tests_common import compare_record, compare_records
-
-import requires_internet
+from BioSQL import BioSeqDatabase
 
 if __name__ == "__main__":
     raise RuntimeError("Call this via test_BioSQL_*online.py not directly")
@@ -43,8 +42,7 @@ SYSTEM = platform.system()
 
 def share_config(dbdriver, dbtype, dbhost, dbuser, dbpasswd, testdb):
     """Make sure we can access the DB settings from this file."""
-    global DBDRIVER, DBTYPE, DBHOST, DBUSER, DBPASSWD, TESTDB, DBSCHEMA
-    global SYSTEM, SQL_FILE
+    global DBDRIVER, DBTYPE, DBHOST, DBUSER, DBPASSWD, TESTDB
     DBDRIVER = dbdriver
     DBTYPE = dbtype
     DBHOST = dbhost
@@ -57,8 +55,7 @@ class TaxonomyTest(unittest.TestCase):
     """Test proper insertion and retrieval of taxonomy data."""
 
     def setUp(self):
-        global DBDRIVER, DBTYPE, DBHOST, DBUSER, DBPASSWD, TESTDB, DBSCHEMA
-        global SYSTEM, SQL_FILE
+        global TESTDB
 
         Entrez.email = "biopython@biopython.org"
         # create TESTDB
@@ -101,10 +98,8 @@ class TaxonomyTest(unittest.TestCase):
 
         rows = self.db.adaptor.execute_and_fetchall(sql)
         self.assertEqual(4, len(rows))
-        values = set()
-        for row in rows:
-            values.add(row[0])
-        self.assertEqual({3704, 3711, 3708, 3702}, set(values))
+        values = [row[0] for row in rows]
+        self.assertCountEqual([3704, 3711, 3708, 3702], values)
 
     def test_load_database_with_tax_lookup(self):
         """Load SeqRecord objects and fetch the taxonomy information from NCBI."""
@@ -126,7 +121,7 @@ class TaxonomyTest(unittest.TestCase):
 
         test_record = self.db.lookup(accession="X55053")
 
-        # make sure that the ncbi taxonomy id is corrent
+        # make sure that the ncbi taxonomy id is correct
         self.assertEqual(test_record.annotations["ncbi_taxid"], 3702)
         # make sure that the taxonomic lineage is the same as reported
         # using the Entrez module

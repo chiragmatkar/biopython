@@ -108,8 +108,10 @@ The following object attributes are provided:
 import re
 
 from Bio.SearchIO._index import SearchIndexer
-from Bio.SearchIO._model import QueryResult, Hit, HSP, HSPFragment
-
+from Bio.SearchIO._model import Hit
+from Bio.SearchIO._model import HSP
+from Bio.SearchIO._model import HSPFragment
+from Bio.SearchIO._model import QueryResult
 
 __all__ = ("FastaM10Parser", "FastaM10Indexer")
 
@@ -256,7 +258,7 @@ def _get_aln_slice_coords(parsed_hsp):
         start = disp_start - start
         stop = disp_start - stop + 1
     stop += seq_stripped.count("-")
-    if not (0 <= start and start < stop and stop <= len(seq_stripped)):
+    if not (0 <= start < stop <= len(seq_stripped)):
         raise ValueError(
             "Problem with sequence start/stop,\n%s[%i:%i]\n%s"
             % (seq, start, stop, parsed_hsp)
@@ -325,7 +327,6 @@ class FastaM10Parser:
         line = self.line
 
         while True:
-
             # one line before the hit table
             if line.startswith("The best scores are:"):
                 qres_state = state_QRES_HITTAB
@@ -336,7 +337,7 @@ class FastaM10Parser:
             elif not line.startswith(">>>") and ">>>" in line:
                 qres_state = state_QRES_NEW
             # the beginning of the query info and its hits + hsps
-            elif line.startswith(">>>") and not line.strip() == ">>><<<":
+            elif line.startswith(">>>") and line.strip() != ">>><<<":
                 qres_state = state_QRES_CONTENT
             # default qres mark
             else:
@@ -468,7 +469,7 @@ class FastaM10Parser:
                 if state == _STATE_NONE:
                     # make sure it's the correct query
                     if not query_id.startswith(line[1:].split(" ")[0]):
-                        raise ValueError("%r vs %r" % (query_id, line))
+                        raise ValueError(f"{query_id!r} vs {line!r}")
                     state = _STATE_QUERY_BLOCK
                     parsed_hsp["query"]["seq"] = ""
                 elif state == _STATE_QUERY_BLOCK:
@@ -532,7 +533,6 @@ class FastaM10Indexer(SearchIndexer):
     def __init__(self, filename):
         """Initialize the class."""
         SearchIndexer.__init__(self, filename)
-        self._handle = self._handle
 
     def __iter__(self):
         """Iterate over FastaM10Indexer; yields query results' keys, start offsets, offset lengths."""

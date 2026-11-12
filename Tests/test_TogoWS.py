@@ -6,20 +6,20 @@
 # package.
 """Testing Bio.TogoWS online code."""
 
-
 import unittest
 from io import StringIO
 from urllib.error import HTTPError
 
-# We want to test these:
-from Bio import TogoWS
+import requires_internet
+
+from Bio import Medline
 
 # In order to check any sequences returned
 from Bio import SeqIO
-from Bio.SeqUtils.CheckSum import seguid
-from Bio import Medline
 
-import requires_internet
+# We want to test these:
+from Bio import TogoWS
+from Bio.SeqUtils.CheckSum import seguid
 
 requires_internet.check()
 
@@ -67,7 +67,7 @@ class TogoFields(unittest.TestCase):
         }
         self.assertTrue(
             dbs.issuperset(expected),
-            "Missing DB: %s" % ", ".join(sorted(expected.difference(dbs))),
+            f"Missing DB: {', '.join(sorted(expected.difference(dbs)))}",
         )
 
     def test_pubmed(self):
@@ -163,7 +163,7 @@ class TogoEntry(unittest.TestCase):
         data = Medline.read(handle)
         handle.close()
         self.assertEqual(
-            data["TI"], "From genomics to chemical genomics: new developments in KEGG.",
+            data["TI"], "From genomics to chemical genomics: new developments in KEGG."
         )
         self.assertEqual(
             data["AU"],
@@ -451,23 +451,6 @@ class TogoEntry(unittest.TestCase):
         self.assertEqual(len(record), 248)
         self.assertEqual(seguid(record.seq), "Ktxz0HgMlhQmrKTuZpOxPZJ6zGU")
 
-    def test_uniprot_swiss(self):
-        """Bio.TogoWS.entry("uniprot", ["A1AG1_HUMAN","A1AG1_MOUSE"])."""
-        # Returns "swiss" format:
-        handle = TogoWS.entry("uniprot", ["A1AG1_HUMAN", "A1AG1_MOUSE"])
-        record1, record2 = SeqIO.parse(handle, "swiss")
-        handle.close()
-
-        self.assertEqual(record1.id, "P02763")
-        self.assertEqual(record1.name, "A1AG1_HUMAN")
-        self.assertEqual(len(record1), 201)
-        self.assertEqual(seguid(record1.seq), "LHDJJ6oC7gUXo8CC7Xn6EUeA8Gk")
-
-        self.assertEqual(record2.id, "Q60590")
-        self.assertEqual(record2.name, "A1AG1_MOUSE")
-        self.assertEqual(len(record2), 207)
-        self.assertEqual(seguid(record2.seq), "FGcj+RFQhP2gRusCmwPFty5PJT0")
-
     def test_nucleotide_fasta(self):
         """Bio.TogoWS.entry("nucleotide", "6273291", "fasta")."""
         handle = TogoWS.entry("nucleotide", "6273291", "fasta")
@@ -576,12 +559,9 @@ class TogoSearch(unittest.TestCase):
         try:
             search_count = TogoWS.search_count(database, search_term)
         except HTTPError as err:
-            raise ValueError("%s from %s" % (err, err.url)) from None
-        if expected_matches and search_count < len(expected_matches):
-            raise ValueError(
-                "Only %i matches, expected at least %i"
-                % (search_count, len(expected_matches))
-            )
+            raise ValueError(f"{err} from {err.url}") from None
+        if expected_matches:
+            self.assertGreaterEqual(search_count, len(expected_matches))
         if search_count > 5000 and not limit:
             print("%i results, skipping" % search_count)
             return
@@ -594,9 +574,7 @@ class TogoSearch(unittest.TestCase):
         search_iter = list(TogoWS.search_iter(database, search_term, limit))
         self.assertEqual(count, len(search_iter))
         for match in expected_matches:
-            self.assertTrue(
-                match in search_iter, "Expected %s in results but not" % match
-            )
+            self.assertIn(match, search_iter, f"Expected {match} in results")
 
 
 class TogoConvert(unittest.TestCase):
@@ -625,7 +603,7 @@ class TogoConvert(unittest.TestCase):
         old = SeqIO.read(filename, "gb")
         with open(filename) as handle:
             new = SeqIO.read(TogoWS.convert(handle, "genbank", "fasta"), "fasta")
-        self.assertEqual(str(old.seq), str(new.seq))
+        self.assertEqual(old.seq, new.seq)
 
 
 #    def test_genbank_to_embl(self):

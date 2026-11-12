@@ -5,21 +5,11 @@
 """Tests for SeqIO SeqXML module."""
 
 import unittest
-import sys
+from io import BytesIO
 
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from io import BytesIO
-
-
-def assert_equal_records(testCase, record_a, record_b):
-    testCase.assertEqual(record_a.id, record_b.id)
-    testCase.assertEqual(record_a.name, record_b.name)
-    testCase.assertEqual(record_a.description, record_b.description)
-    testCase.assertEqual(str(record_a.seq), str(record_b.seq))
-    testCase.assertEqual(record_a.dbxrefs, record_b.dbxrefs)
-    testCase.assertEqual(record_a.annotations, record_a.annotations)
 
 
 class TestSimpleRead(unittest.TestCase):
@@ -36,7 +26,6 @@ class TestSimpleRead(unittest.TestCase):
 
 
 class TestDetailedRead(unittest.TestCase):
-
     records = {}
 
     def setUp(self):
@@ -62,10 +51,10 @@ class TestDetailedRead(unittest.TestCase):
 
     def test_full_characters_set_read(self):
         """Read full characters set for each type."""
-        self.assertEqual(str(self.records["dna"][1].seq), "ACGTMRWSYKVHDBXN.-")
-        self.assertEqual(str(self.records["rna"][1].seq), "ACGUMRWSYKVHDBXN.-")
+        self.assertEqual(self.records["dna"][1].seq, "ACGTMRWSYKVHDBXN.-")
+        self.assertEqual(self.records["rna"][1].seq, "ACGUMRWSYKVHDBXN.-")
         self.assertEqual(
-            str(self.records["protein"][1].seq), "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-*"
+            self.records["protein"][1].seq, "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-*"
         )
 
     def test_duplicated_property(self):
@@ -185,7 +174,6 @@ class TestReadAndWrite(unittest.TestCase):
         self._write_parse_and_compare(read1_records)
 
     def _write_parse_and_compare(self, read1_records):
-
         handle = BytesIO()
 
         SeqIO.write(read1_records, handle, "seqxml")
@@ -196,7 +184,12 @@ class TestReadAndWrite(unittest.TestCase):
         self.assertEqual(len(read1_records), len(read2_records))
 
         for record1, record2 in zip(read1_records, read2_records):
-            assert_equal_records(self, record1, record2)
+            self.assertEqual(record1.id, record2.id)
+            self.assertEqual(record1.name, record2.name)
+            self.assertEqual(record1.description, record2.description)
+            self.assertEqual(record1.seq, record2.seq)
+            self.assertEqual(record1.dbxrefs, record2.dbxrefs)
+            self.assertEqual(record1.annotations, record2.annotations)
 
     def test_write_species(self):
         """Test writing species from annotation tags."""
@@ -210,20 +203,11 @@ class TestReadAndWrite(unittest.TestCase):
         text = output.decode("UTF-8")
         self.assertIn("Homo sapiens (Human)", text)
         self.assertIn("9606", text)
-        if '<species name="Homo sapiens (Human)" ncbiTaxID="9606"/>' in text:
-            # Good, but don't get this (do we?)
-            pass
-        elif '<species name="Homo sapiens (Human)" ncbiTaxID="9606"></species>' in text:
-            # Not as concise, but fine (seen on C Python)
-            pass
-        elif '<species ncbiTaxID="9606" name="Homo sapiens (Human)"></species>' in text:
-            # Jython uses a different order
-            pass
-        elif '<species ncbiTaxID="9606" name="Homo sapiens (Human)"/>' in text:
-            # This would be fine too, but don't get this (do we?)
-            pass
-        else:
-            raise ValueError("Mising expected <species> tag: %r" % text)
+        self.assertIn(
+            '<species name="Homo sapiens (Human)" ncbiTaxID="9606"></species>',
+            text,
+            msg=f"Missing expected <species> tag: {text!r}",
+        )
 
 
 class TestReadCorruptFiles(unittest.TestCase):
@@ -234,6 +218,7 @@ class TestReadCorruptFiles(unittest.TestCase):
         # Since one block is likely large enough to cover the first few
         # entries in the file, the ValueError may be raised after we call
         # SeqIO.parse, before we start iterating over the file.
+
         def f(path):
             records = SeqIO.parse(path, "seqxml")
             for record in records:
@@ -241,6 +226,29 @@ class TestReadCorruptFiles(unittest.TestCase):
 
         self.assertRaises(ValueError, f, "SeqXML/corrupt_example1.xml")
         self.assertRaises(ValueError, f, "SeqXML/corrupt_example2.xml")
+        self.assertRaises(ValueError, f, "SeqXML/corrupt_example3.xml")
+
+
+class TestOldVersions(unittest.TestCase):
+    def test_version01(self):
+        """Test for version 0.1 specific features."""
+        records = list(SeqIO.parse("SeqXML/version_01_example.xml", "seqxml"))
+        self.assertEqual(records[0].seq, "AAAAAACGTAAA")
+        self.assertEqual(records[0].dbxrefs[0], "db:1")
+        self.assertEqual(records[1].seq, "AAAUUUUCTGAA")
+        self.assertEqual(records[2].seq, "GAKKVFIEDVSKEFVEEFIWPAVQSSALYE")
+
+    def test_wrong_version(self):
+        """Handling of wrong versions."""
+
+        def f(path):
+            records = SeqIO.parse(path, "seqxml")
+            for record in records:
+                pass
+
+        self.assertRaises(ValueError, f, "SeqXML/wrong_version1.xml")
+        self.assertRaises(ValueError, f, "SeqXML/wrong_version2.xml")
+        self.assertRaises(ValueError, f, "SeqXML/wrong_version3.xml")
 
 
 if __name__ == "__main__":

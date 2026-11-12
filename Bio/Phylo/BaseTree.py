@@ -17,7 +17,6 @@ import itertools
 import random
 import re
 
-
 # General tree-traversal algorithms
 
 
@@ -136,7 +135,7 @@ def _attribute_matcher(kwargs):
                 return pattern == target
             if pattern is None:
                 return target is None
-            raise TypeError("invalid query type: %s" % type(pattern))
+            raise TypeError(f"invalid query type: {type(pattern)}")
         return True
 
     return match
@@ -177,9 +176,7 @@ def _object_matcher(obj):
         return _attribute_matcher(obj)
     if callable(obj):
         return _function_matcher(obj)
-    raise ValueError(
-        "%s (type %s) is not a valid type for comparison." % (obj, type(obj))
-    )
+    raise ValueError(f"{obj} (type {type(obj)}) is not a valid type for comparison.")
 
 
 def _combine_matchers(target, kwargs, require_spec):
@@ -216,10 +213,7 @@ def _combine_args(first, *rest):
     # of cases where either style is more convenient, so let's support both
     # (for backward compatibility and consistency between methods).
     if hasattr(first, "__iter__") and not (
-        isinstance(first, TreeElement)
-        or isinstance(first, type)
-        or isinstance(first, str)
-        or isinstance(first, dict)
+        isinstance(first, (TreeElement, dict, str, type))
     ):
         # terminals is an iterable of targets
         if rest:
@@ -239,14 +233,14 @@ def _combine_args(first, *rest):
 class TreeElement:
     """Base class for all Bio.Phylo classes."""
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Show this object's constructor with its primitive arguments."""
 
         def pair_as_kwarg_string(key, val):
             if isinstance(val, str):
                 val = val[:57] + "..." if len(val) > 60 else val
-                return "%s='%s'" % (key, val)
-            return "%s=%s" % (key, val)
+                return f"{key}='{val}'"
+            return f"{key}={val}"
 
         return "%s(%s)" % (
             self.__class__.__name__,
@@ -257,7 +251,9 @@ class TreeElement:
             ),
         )
 
-    __str__ = __repr__
+    def __str__(self) -> str:
+        """Return the object's constructor representation, as given by __repr__."""
+        return self.__repr__()
 
 
 class TreeMixin:
@@ -286,7 +282,7 @@ class TreeMixin:
             order_func = order_opts[order]
         except KeyError:
             raise ValueError(
-                "Invalid order '%s'; must be one of: %s" % (order, tuple(order_opts))
+                f"Invalid order '{order}'; must be one of: {tuple(order_opts)}"
             ) from None
 
         if follow_attrs:
@@ -439,9 +435,9 @@ class TreeMixin:
         """
         paths = [self.get_path(t) for t in _combine_args(targets, *more_targets)]
         # Validation -- otherwise izip throws a spooky error below
-        for p, t in zip(paths, targets):
+        for p, t in zip(paths, _combine_args(targets, *more_targets)):
             if p is None:
-                raise ValueError("target %r is not in this tree" % t)
+                raise ValueError(f"target {t!r} is not in this tree")
         mrca = self.root
         for level in zip(*paths):
             ref = level[0]
@@ -471,7 +467,7 @@ class TreeMixin:
             instances in the tree, and values are the distance from the root to
             each clade (including terminals).
 
-        """
+        """  # noqa: D402
         if unit_branch_lengths:
             depth_of = lambda c: 1  # noqa: E731
         else:
@@ -598,7 +594,8 @@ class TreeMixin:
         popped = parent.clades.pop(parent.clades.index(path[-1]))
         extra_length = popped.branch_length or 0
         for child in popped:
-            child.branch_length += extra_length
+            if child.branch_length is not None:
+                child.branch_length += extra_length
         parent.clades.extend(popped.clades)
         return parent
 
@@ -665,8 +662,8 @@ class TreeMixin:
     def prune(self, target=None, **kwargs):
         """Prunes a terminal clade from the tree.
 
-        If taxon is from a bifurcation, the connecting node will be collapsed
-        and its branch length added to remaining terminal node. This might be no
+        If the taxon is from a bifurcation, the connecting node will be collapsed
+        and its branch length added to remaining terminal node. This might no
         longer be a meaningful value.
 
         :returns: parent clade of the pruned target
@@ -684,17 +681,14 @@ class TreeMixin:
         parent.clades.remove(path[-1])
         if len(parent) == 1:
             # We deleted a branch from a bifurcation
-            if parent == self.root:
+            child = parent.clades[0]
+            if child.branch_length is not None:
+                child.branch_length += parent.branch_length or 0.0
+            if len(path) == 1:
                 # If we're at the root, move the root upwards
-                # NB: This loses the length of the original branch
-                newroot = parent.clades[0]
-                newroot.branch_length = None
-                parent = self.root = newroot
+                parent = self.root = child
             else:
                 # If we're not at the root, collapse this parent
-                child = parent.clades[0]
-                if child.branch_length is not None:
-                    child.branch_length += parent.branch_length or 0.0
                 if len(path) < 3:
                     grandparent = self.root
                 else:
@@ -772,7 +766,7 @@ class Tree(TreeElement, TreeMixin):
 
         """
         if isinstance(taxa, int):
-            taxa = ["taxon%s" % (i + 1) for i in range(taxa)]
+            taxa = [f"taxon{i + 1}" for i in range(taxa)]
         elif hasattr(taxa, "__iter__"):
             taxa = list(taxa)
         else:
@@ -906,7 +900,6 @@ class Tree(TreeElement, TreeMixin):
 
         self.root = new_root
         self.rooted = True
-        return
 
     def root_at_midpoint(self):
         """Root the tree at the midpoint of the two most distant taxa.
@@ -955,8 +948,7 @@ class Tree(TreeElement, TreeMixin):
     def __format__(self, format_spec):
         """Serialize the tree as a string in the specified file format.
 
-        This method supports the ``format`` built-in function added in Python
-        2.6/3.0.
+        This method supports Python's ``format`` built-in function.
 
         :param format_spec: a lower-case string supported by ``Bio.Phylo.write``
             as an output file format.
@@ -964,6 +956,7 @@ class Tree(TreeElement, TreeMixin):
         """
         if format_spec:
             from io import StringIO
+
             from Bio.Phylo import _io
 
             handle = StringIO()
@@ -973,16 +966,18 @@ class Tree(TreeElement, TreeMixin):
             # Follow python convention and default to using __str__
             return str(self)
 
-    def format(self, format):
+    def format(self, fmt=None):
         """Serialize the tree as a string in the specified file format.
 
-        This duplicates the __format__ magic method for pre-2.6 Pythons.
+        :param fmt: a lower-case string supported by ``Bio.Phylo.write``
+            as an output file format.
+
         """
-        return self.__format__(format)
+        return self.__format__(fmt)
 
     # Pretty-printer for the entire tree hierarchy
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a string representation of the entire tree.
 
         Serialize each sub-clade recursively using ``repr`` to create a summary
@@ -1077,7 +1072,7 @@ class Clade(TreeElement, TreeMixin):
         return iter(self.clades)
 
     def __len__(self):
-        """Return the number of clades directy under the root."""
+        """Return the number of clades directly under the root."""
         return len(self.clades)
 
     def __bool__(self):
@@ -1089,7 +1084,7 @@ class Clade(TreeElement, TreeMixin):
         """
         return True
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return name of the class instance."""
         if self.name:
             return self.name[:37] + "..." if len(self.name) > 40 else self.name
@@ -1110,12 +1105,12 @@ class Clade(TreeElement, TreeMixin):
                 # HTML-style hex string
                 self._color = BranchColor.from_hex(arg)
             else:
-                raise ValueError("invalid color string %s" % arg)
+                raise ValueError(f"invalid color string {arg}")
         elif hasattr(arg, "__iter__") and len(arg) == 3:
             # RGB triplet
             self._color = BranchColor(*arg)
         else:
-            raise ValueError("invalid color value %s" % arg)
+            raise ValueError(f"invalid color value {arg}")
 
     color = property(_get_color, _set_color, doc="Branch color.")
 
@@ -1191,7 +1186,7 @@ class BranchColor:
         ), "need a 24-bit hexadecimal string, e.g. #000000"
 
         RGB = hexstr[1:3], hexstr[3:5], hexstr[5:]
-        return cls(*[int("0x" + cc, base=16) for cc in RGB])
+        return cls(*(int("0x" + cc, base=16) for cc in RGB))
 
     @classmethod
     def from_name(cls, colorname):
@@ -1211,7 +1206,7 @@ class BranchColor:
         '#0cc864'
 
         """
-        return "#%02x%02x%02x" % (self.red, self.green, self.blue)
+        return f"#{self.red:02x}{self.green:02x}{self.blue:02x}"
 
     def to_rgb(self):
         """Return a tuple of RGB values (0 to 255) representing this color.
@@ -1225,7 +1220,7 @@ class BranchColor:
         """
         return (self.red, self.green, self.blue)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Preserve the standard RGB order when representing this object."""
         return "%s(red=%d, green=%d, blue=%d)" % (
             self.__class__.__name__,
@@ -1234,6 +1229,6 @@ class BranchColor:
             self.blue,
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Show the color's RGB values."""
         return "(%d, %d, %d)" % (self.red, self.green, self.blue)

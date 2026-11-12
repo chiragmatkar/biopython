@@ -13,8 +13,9 @@ See https://www.iucr.org/resources/cif/spec/version1.1/cifsyntax for syntax.
 import re
 from collections import defaultdict
 
+from Bio.PDB.PDBIO import Select
+from Bio.PDB.PDBIO import StructureIO
 from Bio.PDB.StructureBuilder import StructureBuilder
-from Bio.PDB.PDBIO import Select, StructureIO
 
 # If certain entries should have a certain order of keys, that is specified here
 mmcif_order = {
@@ -67,7 +68,6 @@ class MMCIFIO(StructureIO):
 
     def __init__(self):
         """Initialise."""
-        pass
 
     def set_dict(self, dic):
         """Set the mmCIF dictionary to be written out."""
@@ -149,6 +149,8 @@ class MMCIFIO(StructureIO):
         # Write out top data_ line
         if data_val:
             out_file.write("data_" + data_val + "\n#\n")
+        else:
+            out_file.write("data_" + "\n#\n")
 
         for key, key_list in key_lists.items():
             # Pick a sample mmCIF value, which can be a list or a single value
@@ -171,8 +173,7 @@ class MMCIFIO(StructureIO):
                 m = 0
                 # Find the maximum key length
                 for i in key_list:
-                    if len(i) > m:
-                        m = len(i)
+                    m = max(m, len(i))
                 for i in key_list:
                     # If the value is a single item list, just take the value
                     if isinstance(sample_val, str):
@@ -199,8 +200,7 @@ class MMCIFIO(StructureIO):
                             val
                         ):
                             len_val += 2
-                        if len_val > col_widths[i]:
-                            col_widths[i] = len_val
+                        col_widths[i] = max(col_widths[i], len_val)
                 # Technically the max of the sum of the column widths is 2048
 
                 # Write the values as rows
@@ -253,8 +253,7 @@ class MMCIFIO(StructureIO):
             or "'" in val
             or '"' in val
             or val[0] in ["_", "#", "$", "[", "]", ";"]
-            or val.startswith("data_")
-            or val.startswith("save_")
+            or val.startswith(("data_", "save_"))
             or val in ["loop_", "stop_", "global_"]
         ):
             return True
@@ -354,9 +353,9 @@ class MMCIFIO(StructureIO):
                             atom_dict["_atom_site.label_seq_id"].append(label_seq_id)
                             atom_dict["_atom_site.pdbx_PDB_ins_code"].append(icode)
                             coord = atom.get_coord()
-                            atom_dict["_atom_site.Cartn_x"].append("%.3f" % coord[0])
-                            atom_dict["_atom_site.Cartn_y"].append("%.3f" % coord[1])
-                            atom_dict["_atom_site.Cartn_z"].append("%.3f" % coord[2])
+                            atom_dict["_atom_site.Cartn_x"].append(f"{coord[0]:.3f}")
+                            atom_dict["_atom_site.Cartn_y"].append(f"{coord[1]:.3f}")
+                            atom_dict["_atom_site.Cartn_z"].append(f"{coord[2]:.3f}")
                             atom_dict["_atom_site.occupancy"].append(
                                 str(atom.get_occupancy())
                             )

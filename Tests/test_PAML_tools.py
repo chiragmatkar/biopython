@@ -5,11 +5,14 @@
 
 """Tests for PAML tools module."""
 
-import unittest
 import os
 import sys
-from Bio.Phylo.PAML import codeml, baseml, yn00
+import unittest
+
 from Bio import MissingExternalDependencyError
+from Bio.Phylo.PAML import baseml
+from Bio.Phylo.PAML import codeml
+from Bio.Phylo.PAML import yn00
 
 
 def is_exe(filepath):
@@ -86,7 +89,7 @@ class CodemlTest(Common):
         self.cml.out_file = os.path.join("PAML", "temp.out")
         self.cml.working_dir = os.path.join("PAML", "codeml_test")
         results = self.cml.run()
-        self.assertTrue(results["version"] > "4.0")
+        self.assertGreater(results["version"], "4.0")
         self.assertIn("NSsites", results)
         self.assertEqual(len(results["NSsites"]), 1)
         self.assertEqual(len(results["NSsites"][0]), 5)
@@ -107,7 +110,7 @@ class BasemlTest(Common):
         self.bml.out_file = os.path.join("PAML", "temp.out")
         self.bml.working_dir = os.path.join("PAML", "baseml_test")
         results = self.bml.run()
-        self.assertTrue(results["version"] > "4.0")
+        self.assertGreater(results["version"], "4.0")
         self.assertIn("parameters", results)
         self.assertEqual(len(results["parameters"]), 5)
 

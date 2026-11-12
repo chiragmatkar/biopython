@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Copyright 2000 by Thomas Sicheritz-Ponten.
-# Copyrigth 2016 by Markus Piotrowski.
+# Copyright 2016 by Markus Piotrowski.
 # All rights reserved.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
@@ -16,10 +16,10 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import colorchooser
 
+import xbb_widget
+
 from Bio.Data.IUPACData import ambiguous_dna_values
 from Bio.Seq import reverse_complement
-
-import xbb_widget
 
 
 class DNAsearch:

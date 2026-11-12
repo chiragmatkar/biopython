@@ -6,11 +6,11 @@
 
 """Parse XMS motif files."""
 
-from Bio import motifs
-
-
-from xml.dom import minidom, Node
 import re
+from xml.dom import minidom
+from xml.dom import Node
+
+from Bio import motifs
 
 
 class XMSScanner:
@@ -90,6 +90,7 @@ class Record(list):
     """
 
     def __str__(self):
+        """Return a string representation of the motifs in the Record object."""
         return "\n".join(str(motif) for motif in self)
 
 

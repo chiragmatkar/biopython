@@ -43,7 +43,9 @@ def _write(drawing, output_file, format, dpi=72):
 
     No return value.
     """
-    from reportlab.graphics import renderPS, renderPDF, renderSVG
+    from reportlab.graphics import renderPDF
+    from reportlab.graphics import renderPS
+    from reportlab.graphics import renderSVG
 
     try:
         from reportlab.graphics import renderPM
@@ -73,7 +75,7 @@ def _write(drawing, output_file, format, dpi=72):
         drawmethod = formatdict[format.upper()]  # select drawing method
     except (KeyError, AttributeError):
         raise ValueError(
-            "Output format should be one of %s" % ", ".join(formatdict)
+            f"Output format should be one of {', '.join(formatdict)}"
         ) from None
 
     if drawmethod is None:

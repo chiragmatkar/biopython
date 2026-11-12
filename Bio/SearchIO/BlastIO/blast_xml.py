@@ -12,11 +12,15 @@ import re
 import warnings
 from itertools import chain
 from xml.etree import ElementTree
-from xml.sax.saxutils import XMLGenerator, escape
+from xml.sax.saxutils import escape
+from xml.sax.saxutils import XMLGenerator
 
 from Bio import BiopythonParserWarning
 from Bio.SearchIO._index import SearchIndexer
-from Bio.SearchIO._model import QueryResult, Hit, HSP, HSPFragment
+from Bio.SearchIO._model import Hit
+from Bio.SearchIO._model import HSP
+from Bio.SearchIO._model import HSPFragment
+from Bio.SearchIO._model import QueryResult
 
 __all__ = ("BlastXmlParser", "BlastXmlIndexer", "BlastXmlWriter")
 
@@ -211,7 +215,7 @@ def _extract_ids_and_descs(raw_id, raw_desc):
     # create a list of lists, each list containing an ID and description
     # or just an ID, if description is not present
     id_desc_pairs = [
-        re.split(_RE_ID_DESC_PATTERN, x, 1)
+        re.split(_RE_ID_DESC_PATTERN, x, maxsplit=1)
         for x in re.split(_RE_ID_DESC_PAIRS_PATTERN, id_desc_line)
     ]
     # make sure empty descriptions are added as empty strings
@@ -290,7 +294,6 @@ class BlastXmlParser:
             # </Iteration> marks the end of a single query
             # which means we can process it
             if event == "end" and qresult_elem.tag == "Iteration":
-
                 # we'll use the following schema
                 # <!ELEMENT Iteration (
                 #        Iteration_iter-num,
@@ -319,7 +322,7 @@ class BlastXmlParser:
                 # 'Query_' marks the beginning of a BLAST+-generated ID,
                 # 'lcl|' marks the beginning of a BLAST legacy-generated ID
                 if not self._use_raw_query_ids and (
-                    query_id.startswith("Query_") or query_id.startswith("lcl|")
+                    query_id.startswith(("Query_", "lcl|"))
                 ):
                     # store the Blast-generated query ID
                     id_desc = query_desc.split(" ", 1)
@@ -346,7 +349,7 @@ class BlastXmlParser:
                             )
                             # fallback to Blast-generated IDs, if the ID is already present
                             # and restore the desc, too
-                            hit.description = "%s %s" % (hit.id, hit.description)
+                            hit.description = f"{hit.id} {hit.description}"
                             hit.id = hit.blast_id
                             # and change the hit_id of the HSPs contained
                             for hsp in hit:
@@ -417,7 +420,6 @@ class BlastXmlParser:
             root_hit_elem = []
 
         for hit_elem in root_hit_elem:
-
             # BLAST sometimes mangles the sequence IDs and descriptions, so we need
             # to extract the actual values.
             raw_hit_id = hit_elem.findtext("Hit_id")
@@ -500,7 +502,7 @@ class BlastXmlParser:
 
                 # adjust 'from' and 'to' coordinates to 0-based ones
                 if value is not None:
-                    if key.endswith("-from") or key.endswith("-to"):
+                    if key.endswith(("-from", "-to")):
                         # store coordinates for further processing
                         coords[val_info[0]] = caster(value)
                         continue
@@ -574,7 +576,7 @@ class BlastXmlIndexer(SearchIndexer):
         handle.seek(0)
         re_desc = re.compile(
             b"<Iteration_query-ID>(.*?)"
-            br"</Iteration_query-ID>\s+?"
+            rb"</Iteration_query-ID>\s+?"
             b"<Iteration_query-def>"
             b"(.*?)</Iteration_query-def>"
         )
@@ -803,9 +805,7 @@ class BlastXmlWriter:
             except AttributeError:
                 # ensure attrs that is not present is optional
                 if elem not in _DTD_OPT:
-                    raise ValueError(
-                        "Element %r (attribute %r) not found" % (elem, attr)
-                    )
+                    raise ValueError(f"Element {elem!r} (attribute {attr!r}) not found")
             else:
                 # custom element-attribute mapping, for fallback values
                 if elem in opt_dict:
@@ -827,12 +827,10 @@ class BlastXmlWriter:
                 content = str(getattr(qresult, attr))
             except AttributeError:
                 if elem not in _DTD_OPT:
-                    raise ValueError(
-                        "Element %s (attribute %s) not found" % (elem, attr)
-                    )
+                    raise ValueError(f"Element {elem} (attribute {attr}) not found")
             else:
                 if elem == "BlastOutput_version":
-                    content = "%s %s" % (qresult.program.upper(), qresult.version)
+                    content = f"{qresult.program.upper()} {qresult.version}"
                 elif qresult.blast_id:
                     if elem == "BlastOutput_query-ID":
                         content = qresult.blast_id
@@ -899,16 +897,13 @@ class BlastXmlWriter:
             if self._use_raw_hit_ids:
                 hit_id = hit.blast_id
                 hit_desc = " >".join(
-                    [
-                        "{} {}".format(x, y)
-                        for x, y in zip(hit.id_all, hit.description_all)
-                    ]
+                    [f"{x} {y}" for x, y in zip(hit.id_all, hit.description_all)]
                 )
             else:
                 hit_id = hit.id
                 hit_desc = hit.description + " >".join(
                     [
-                        "{} {}".format(x, y)
+                        f"{x} {y}"
                         for x, y in zip(hit.id_all[1:], hit.description_all[1:])
                     ]
                 )
@@ -934,9 +929,7 @@ class BlastXmlWriter:
                 # in the DTD
                 except AttributeError:
                     if elem not in _DTD_OPT:
-                        raise ValueError(
-                            "Element %s (attribute %s) not found" % (elem, attr)
-                        )
+                        raise ValueError(f"Element {elem} (attribute {attr}) not found")
                 else:
                     xml.simpleElement(elem, str(content))
             self.hsp_counter += 1

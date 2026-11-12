@@ -21,8 +21,6 @@ from Bio.Phylo import Newick
 class NewickError(Exception):
     """Exception raised when Newick object construction cannot continue."""
 
-    pass
-
 
 tokens = [
     (r"\(", "open parens"),
@@ -35,7 +33,7 @@ tokens = [
     (r"\;", "semicolon"),
     (r"\n", "newline"),
 ]
-tokenizer = re.compile("(%s)" % "|".join(token[0] for token in tokens))
+tokenizer = re.compile(f"({'|'.join(token[0] for token in tokens)})")
 token_dict = {name: re.compile(token) for token, name in tokens}
 
 
@@ -84,7 +82,7 @@ def _format_comment(text):
 
 def _get_comment(clade):
     try:
-        comment = clade.coment
+        comment = clade.comment
     except AttributeError:
         pass
     else:
@@ -145,7 +143,14 @@ class Parser:
 
             if token.startswith("'"):
                 # quoted label; add characters to clade name
-                current_clade.name = token[1:-1]
+                if not current_clade.name:
+                    # This is almost always the case
+                    current_clade.name = token[1:-1]
+                else:
+                    # Hack to support labels with escaped quotes. Escaped quotes
+                    # are two consequtive quotes. To the parser, this just looks
+                    # like two quoted labels next to each other. See issue #4537
+                    current_clade.name += token[:-1]
 
             elif token.startswith("["):
                 # comment
@@ -198,14 +203,16 @@ class Parser:
                 # unquoted node label
                 current_clade.name = token
 
-        if not lp_count == rp_count:
-            raise NewickError("Number of open/close parentheses do not match.")
+        if lp_count != rp_count:
+            raise NewickError(
+                f"Mismatch, {lp_count} open vs {rp_count} close parentheses."
+            )
 
         # if ; token broke out of for loop, there should be no remaining tokens
         try:
             next_token = next(tokens)
             raise NewickError(
-                "Text after semicolon in Newick tree: %s" % next_token.group()
+                f"Text after semicolon in Newick tree: {next_token.group()}"
             )
         except StopIteration:
             pass
@@ -271,7 +278,7 @@ class Writer:
         ladderize=None,
         max_confidence=1.0,
         format_confidence="%1.2f",
-        format_branch_length="%1.5f",
+        format_branch_length="%1.8g",
     ):
         """Return an iterable of PAUP-compatible tree lines."""
         # If there's a conflict in the arguments, we override plain=True
@@ -292,13 +299,13 @@ class Writer:
             if label:
                 unquoted_label = re.match(token_dict["unquoted node label"], label)
                 if (not unquoted_label) or (unquoted_label.end() < len(label)):
-                    label = "'%s'" % label.replace("\\", "\\\\").replace("'", "\\'")
+                    label = "'%s'" % label.replace("'", "''")
 
             if clade.is_terminal():  # terminal
                 return label + make_info_string(clade, terminal=True)
             else:
                 subtrees = (newickize(sub) for sub in clade)
-                return "(%s)%s" % (",".join(subtrees), label + make_info_string(clade))
+                return f"({','.join(subtrees)}){label + make_info_string(clade)}"
 
         # Convert each tree to a string
         for tree in self.trees:
@@ -312,7 +319,7 @@ class Writer:
             # Nexus-style (?) notation before the raw Newick tree
             treeline = ["tree", (tree.name or "a_tree"), "="]
             if tree.weight != 1:
-                treeline.append("[&W%s]" % round(float(tree.weight), 3))
+                treeline.append(f"[&W{round(float(tree.weight), 3)}]")
             if tree.rooted:
                 treeline.append("[&R]")
             treeline.append(rawtree)
@@ -350,7 +357,7 @@ class Writer:
             # write only branchlengths, ignore support
             def make_info_string(clade, terminal=False):
                 return (
-                    ":" + format_branch_length % clade.branch_length
+                    ":" + format_branch_length % (clade.branch_length or 0.0)
                 ) + _get_comment(clade)
 
         else:

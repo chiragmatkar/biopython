@@ -13,10 +13,11 @@ printed record matches the original record.
 Usage:
 python check_output.py <name of file to parse>
 """
+
 # standard modules
-import sys
-import os
 import gzip
+import os
+import sys
 from io import StringIO
 
 # biopython
@@ -47,8 +48,8 @@ def do_comparison(good_record, test_record):
                 raise AssertionError(f"Extra info in Expected: `{good_line}`")
 
         assert test_line == good_line, (
-            "Expected does not match Test.\nExpect:`%s`\nTest  :`%s`\n"
-            % (good_line, test_line)
+            "Expected does not match Test.\n"
+            f"Expect:`{good_line}`\nTest  :`{test_line}`\n"
         )
 
 

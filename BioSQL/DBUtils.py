@@ -14,8 +14,7 @@
 
 import os
 
-
-_dbutils = {}
+_dbutils: dict[str, type["Generic_dbutils"]] = {}
 
 
 class Generic_dbutils:
@@ -23,7 +22,6 @@ class Generic_dbutils:
 
     def __init__(self):
         """Create a Generic_dbutils object."""
-        pass
 
     def tname(self, table):
         """Return the name of the table."""
@@ -36,7 +34,7 @@ class Generic_dbutils:
         """Return the last used id for a table."""
         # XXX: Unsafe without transactions isolation
         table = self.tname(table)
-        sql = "select max(%s_id) from %s" % (table, table)
+        sql = f"select max({table}_id) from {table}"
         cursor.execute(sql)
         rv = cursor.fetchone()
         return rv[0]
@@ -52,7 +50,6 @@ class Generic_dbutils:
     def autocommit(self, conn, y=1):
         """Set autocommit on the database connection."""
         # Let's hope it was not really needed
-        pass
 
 
 class Sqlite_dbutils(Generic_dbutils):
@@ -104,14 +101,14 @@ class _PostgreSQL_dbutils(Generic_dbutils):
 
     def next_id(self, cursor, table):
         table = self.tname(table)
-        sql = "SELECT nextval('%s_pk_seq')" % table
+        sql = f"SELECT nextval('{table}_pk_seq')"
         cursor.execute(sql)
         rv = cursor.fetchone()
         return rv[0]
 
     def last_id(self, cursor, table):
         table = self.tname(table)
-        sql = "SELECT currval('%s_pk_seq')" % table
+        sql = f"SELECT currval('{table}_pk_seq')"
         cursor.execute(sql)
         rv = cursor.fetchone()
         return rv[0]

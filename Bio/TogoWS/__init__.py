@@ -31,13 +31,12 @@ http://togows.dbcls.jp/site/en/soap.html
 http://soapy.sourceforge.net/
 """
 
-
 import io
 import time
-
-from urllib.request import urlopen
 from urllib.parse import quote
+from urllib.request import urlopen
 
+from Bio._utils import function_with_previous
 
 # Constant
 _BASE_URL = "http://togows.dbcls.jp"
@@ -45,9 +44,9 @@ _BASE_URL = "http://togows.dbcls.jp"
 # Caches:
 _search_db_names = None
 _entry_db_names = None
-_entry_db_fields = {}
-_entry_db_formats = {}
-_convert_formats = []
+_entry_db_fields: dict[str, str] = {}
+_entry_db_formats: dict[str, str] = {}
+_convert_formats: list[str] = []
 
 
 def _get_fields(url):
@@ -63,11 +62,11 @@ def _get_entry_dbs():
 
 
 def _get_entry_fields(db):
-    return _get_fields(_BASE_URL + "/entry/%s?fields" % db)
+    return _get_fields(_BASE_URL + f"/entry/{db}?fields")
 
 
 def _get_entry_formats(db):
-    return _get_fields(_BASE_URL + "/entry/%s?formats" % db)
+    return _get_fields(_BASE_URL + f"/entry/{db}?formats")
 
 
 def _get_convert_formats():
@@ -79,7 +78,7 @@ def entry(db, id, format=None, field=None):
 
     Arguments:
      - db - database (string), see list below.
-     - id - identier (string) or a list of identifiers (either as a list of
+     - id - identifier (string) or a list of identifiers (either as a list of
        strings or a single string with comma separators).
      - format - return data file format (string), options depend on the database
        e.g. "xml", "json", "gff", "fasta", "ttl" (RDF Turtle)
@@ -101,12 +100,12 @@ def entry(db, id, format=None, field=None):
     EFetch, available in Biopython as Bio.Entrez.efetch(...), but that
     does not offer field extraction.
     """
-    global _entry_db_names, _entry_db_fields, fetch_db_formats
+    global _entry_db_names
     if _entry_db_names is None:
         _entry_db_names = _get_entry_dbs()
     if db not in _entry_db_names:
         raise ValueError(
-            "TogoWS entry fetch does not officially support database '%s'." % db
+            f"TogoWS entry fetch does not officially support database '{db}'."
         )
     if field:
         try:
@@ -143,7 +142,7 @@ def entry(db, id, format=None, field=None):
 
     if isinstance(id, list):
         id = ",".join(id)
-    url = _BASE_URL + "/entry/%s/%s" % (db, quote(id))
+    url = _BASE_URL + f"/entry/{db}/{quote(id)}"
     if field:
         url += "/" + field
     if format:
@@ -174,18 +173,16 @@ def search_count(db, query):
             "TogoWS search does not officially support database '%s'. "
             "See %s/search/ for options." % (db, _BASE_URL)
         )
-    url = _BASE_URL + "/search/%s/%s/count" % (db, quote(query))
+    url = _BASE_URL + f"/search/{db}/{quote(query)}/count"
     handle = _open(url)
     data = handle.read()
     handle.close()
     if not data:
-        raise ValueError("TogoWS returned no data from URL %s" % url)
+        raise ValueError(f"TogoWS returned no data from URL {url}")
     try:
         return int(data.strip())
     except ValueError:
-        raise ValueError(
-            "Expected an integer from URL %s, got: %r" % (url, data)
-        ) from None
+        raise ValueError(f"Expected an integer from URL {url}, got: {data!r}") from None
 
 
 def search_iter(db, query, limit=None, batch=100):
@@ -228,7 +225,7 @@ def search_iter(db, query, limit=None, batch=100):
             raise RuntimeError("Same search results for previous offset")
         for identifier in ids:
             if identifier in prev_ids:
-                raise RuntimeError("Result %s was in previous batch" % identifier)
+                raise RuntimeError(f"Result {identifier} was in previous batch")
             yield identifier
         offset += batch
         remain -= batch
@@ -279,19 +276,19 @@ def search(db, query, offset=None, limit=None, format=None):
             "TogoWS search does not explicitly support database '%s'. "
             "See %s/search/ for options." % (db, _BASE_URL)
         )
-    url = _BASE_URL + "/search/%s/%s" % (db, quote(query))
+    url = _BASE_URL + f"/search/{db}/{quote(query)}"
     if offset is not None and limit is not None:
         try:
             offset = int(offset)
         except ValueError:
             raise ValueError(
-                "Offset should be an integer (at least one), not %r" % offset
+                f"Offset should be an integer (at least one), not {offset!r}"
             ) from None
         try:
             limit = int(limit)
         except ValueError:
             raise ValueError(
-                "Limit should be an integer (at least one), not %r" % limit
+                f"Limit should be an integer (at least one), not {limit!r}"
             ) from None
         if offset <= 0:
             raise ValueError("Offset should be at least one, not %i" % offset)
@@ -325,8 +322,8 @@ def convert(data, in_format, out_format):
         _convert_formats = _get_convert_formats()
     if [in_format, out_format] not in _convert_formats:
         msg = "\n".join("%s -> %s" % tuple(pair) for pair in _convert_formats)
-        raise ValueError("Unsupported conversion. Choose from:\n%s" % msg)
-    url = _BASE_URL + "/convert/%s.%s" % (in_format, out_format)
+        raise ValueError(f"Unsupported conversion. Choose from:\n{msg}")
+    url = _BASE_URL + f"/convert/{in_format}.{out_format}"
     # TODO - Should we just accept a string not a handle? What about a filename?
     try:
         # Handle
@@ -337,6 +334,7 @@ def convert(data, in_format, out_format):
     return _open(url, post=data)
 
 
+@function_with_previous
 def _open(url, post=None):
     """Build the URL and open a handle to it (PRIVATE).
 

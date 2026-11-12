@@ -32,20 +32,19 @@ zero-based end position. We can therefore manipulate ``start`` and
 For an inclusive end coordinate, we need to use ``end = start + size - 1``.
 A 1-column wide alignment would have ``start == end``.
 """
+
 import os
 from itertools import islice
 
 try:
-    from sqlite3 import dbapi2 as _sqlite
+    from sqlite3 import dbapi2
 except ImportError:
-    # Not present on Jython, but should be included in Python 2.5
-    # or later (unless compiled from source without its dependencies)
-    # Still want to offer simple parsing/output
-    _sqlite = None
+    dbapi2 = None  # type: ignore
 
+from Bio.Align import MultipleSeqAlignment
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from Bio.Align import MultipleSeqAlignment
+
 from .Interfaces import SequentialAlignmentWriter
 
 MAFINDEX_VERSION = 2
@@ -81,7 +80,7 @@ class MafWriter(SequentialAlignmentWriter):
             "%15s" % record.annotations.get("srcSize", 0),
             str(record.seq),
         ]
-        self.handle.write("%s\n" % " ".join(fields))
+        self.handle.write(f"{' '.join(fields)}\n")
 
     def write_alignment(self, alignment):
         """Write a complete alignment to a MAF block.
@@ -103,7 +102,7 @@ class MafWriter(SequentialAlignmentWriter):
         try:
             anno = " ".join(
                 [
-                    "%s=%s" % (x, y)
+                    f"{x}={y}"
                     for x, y in alignment._annotations.items()
                     if x in ("score", "pass")
                 ]
@@ -111,7 +110,7 @@ class MafWriter(SequentialAlignmentWriter):
         except AttributeError:
             anno = "score=0.00"
 
-        self.handle.write("a %s\n" % (anno,))
+        self.handle.write(f"a {anno}\n")
 
         recs_out = 0
 
@@ -141,10 +140,14 @@ def MafIterator(handle, seq_count=None):
 
     while True:
         # allows parsing of the last bundle without duplicating code
+        line = handle.readline()
+
         try:
-            line = next(handle)
-        except StopIteration:
-            line = ""
+            # Will be in binary mode if called via the indexing code
+            # (which needs the raw offsets for cross platform indexing)
+            line = line.decode("ASCII")
+        except AttributeError:
+            pass
 
         if in_a_bundle:
             if line.startswith("s"):
@@ -182,10 +185,10 @@ def MafIterator(handle, seq_count=None):
                             "Found dot/period in first sequence of alignment"
                         )
 
-                    ref = str(records[0].seq)
+                    ref = records[0].seq
                     new = []
 
-                    for (letter, ref_letter) in zip(sequence, ref):
+                    for letter, ref_letter in zip(sequence, ref):
                         new.append(ref_letter if letter == "." else letter)
 
                     sequence = "".join(new)
@@ -236,9 +239,7 @@ def MafIterator(handle, seq_count=None):
                 annotations = []
                 records = []
             else:
-                raise ValueError(
-                    "Error parsing alignment - unexpected line:\n%s" % (line,)
-                )
+                raise ValueError(f"Error parsing alignment - unexpected line:\n{line}")
         elif line.startswith("a"):
             # start a bundle of records
             in_a_bundle = True
@@ -263,6 +264,14 @@ class MafIndex:
 
     def __init__(self, sqlite_file, maf_file, target_seqname):
         """Indexes or loads the index of a MAF file."""
+        if dbapi2 is None:
+            # Python was compiled without sqlite3 support
+            from Bio import MissingPythonDependencyError
+
+            raise MissingPythonDependencyError(
+                "Python was compiled without the sqlite3 module"
+            )
+
         self._target_seqname = target_seqname
         # example: Tests/MAF/ucsc_mm9_chr10.mafindex
         self._index_filename = sqlite_file
@@ -271,18 +280,41 @@ class MafIndex:
         # example: Tests/MAF/ucsc_mm9_chr10.maf
         self._maf_file = maf_file
 
-        self._maf_fp = open(self._maf_file)
+        # Opening in bytes mode as want real offsets, not where
+        # Python attempts to hide cross-platform newline differences etc
+        self._maf_fp = open(self._maf_file, "rb")
 
         # if sqlite_file exists, use the existing db, otherwise index the file
         if os.path.isfile(sqlite_file):
-            self._con = _sqlite.connect(sqlite_file)
-            self._record_count = self.__check_existing_db()
+            self._con = dbapi2.connect(sqlite_file)
+            try:
+                self._record_count = self.__check_existing_db()
+            except ValueError as err:
+                self._maf_fp.close()
+                self._con.close()
+                raise err from None
         else:
-            self._con = _sqlite.connect(sqlite_file)
-            self._record_count = self.__make_new_index()
+            self._con = dbapi2.connect(sqlite_file)
+            try:
+                self._record_count = self.__make_new_index()
+            except ValueError as err:
+                self._maf_fp.close()
+                self._con.close()
+                raise err from None
 
         # lastly, setup a MafIterator pointing at the open maf_file
         self._mafiter = MafIterator(self._maf_fp)
+
+    def close(self):
+        """Close the file handle being used to read the data.
+
+        Once called, further use of the index won't work. The sole
+        purpose of this method is to allow explicit handle closure
+        - for example if you wish to delete the file, on Windows
+        you must first close all open handles to that file.
+        """
+        self._con.close()
+        self._record_count = 0
 
     def __check_existing_db(self):
         """Perform basic sanity checks upon loading an existing index (PRIVATE)."""
@@ -320,8 +352,7 @@ class MafIndex:
             if tmp_mafpath != os.path.abspath(self._maf_file):
                 # Original and given absolute paths differ.
                 raise ValueError(
-                    "Index uses a different file (%s != %s)"
-                    % (filename, self._maf_file)
+                    f"Index uses a different file ({filename} != {self._maf_file})"
                 )
 
             db_target = self._con.execute(
@@ -352,23 +383,23 @@ class MafIndex:
 
             return records_found
 
-        except (_sqlite.OperationalError, _sqlite.DatabaseError) as err:
-            raise ValueError("Problem with SQLite database: %s" % err) from None
+        except (dbapi2.OperationalError, dbapi2.DatabaseError) as err:
+            raise ValueError(f"Problem with SQLite database: {err}") from None
 
     def __make_new_index(self):
         """Read MAF file and generate SQLite index (PRIVATE)."""
         # make the tables
         self._con.execute("CREATE TABLE meta_data (key TEXT, value TEXT);")
         self._con.execute(
-            "INSERT INTO meta_data (key, value) VALUES ('version', %s);"
-            % MAFINDEX_VERSION
+            "INSERT INTO meta_data (key, value) VALUES (?, ?);",
+            ("version", MAFINDEX_VERSION),
         )
         self._con.execute(
             "INSERT INTO meta_data (key, value) VALUES ('record_count', -1);"
         )
         self._con.execute(
-            "INSERT INTO meta_data (key, value) VALUES ('target_seqname', '%s');"
-            % (self._target_seqname,)
+            "INSERT INTO meta_data (key, value) VALUES (?, ?);",
+            ("target_seqname", self._target_seqname),
         )
         # Determine whether to store maf file as relative to the index or absolute
         # See https://github.com/biopython/biopython/pull/381
@@ -396,7 +427,8 @@ class MafIndex:
             # example: /home/bli/src/biopython/Tests/MAF/ucsc_mm9_chr10.maf
             mafpath = os.path.abspath(self._maf_file)
         self._con.execute(
-            "INSERT INTO meta_data (key, value) VALUES ('filename', '%s');" % (mafpath,)
+            "INSERT INTO meta_data (key, value) VALUES (?, ?);",
+            ("filename", mafpath),
         )
         self._con.execute(
             "CREATE TABLE offset_data (bin INTEGER, start INTEGER, end INTEGER, offset INTEGER);"
@@ -429,8 +461,7 @@ class MafIndex:
         self._con.execute("CREATE INDEX IF NOT EXISTS end_index ON offset_data(end);")
 
         self._con.execute(
-            "UPDATE meta_data SET value = '%s' WHERE key = 'record_count'"
-            % (insert_count,)
+            f"UPDATE meta_data SET value = '{insert_count}' WHERE key = 'record_count'"
         )
 
         self._con.commit()
@@ -447,7 +478,7 @@ class MafIndex:
         line = self._maf_fp.readline()
 
         while line:
-            if line.startswith("a"):
+            if line.startswith(b"a"):
                 # note the offset
                 offset = self._maf_fp.tell() - len(line)
 
@@ -455,15 +486,15 @@ class MafIndex:
                 while True:
                     line = self._maf_fp.readline()
 
-                    if not line.strip() or line.startswith("a"):
+                    if not line.strip() or line.startswith(b"a"):
                         # Empty line or new alignment record
                         raise ValueError(
                             "Target for indexing (%s) not found in this bundle"
                             % (self._target_seqname,)
                         )
-                    elif line.startswith("s"):
+                    elif line.startswith(b"s"):
                         # s (literal), src (ID), start, size, strand, srcSize, text (sequence)
-                        line_split = line.strip().split()
+                        line_split = line.decode("ASCII").strip().split()
 
                         if line_split[1] == self._target_seqname:
                             start = int(line_split[2])
@@ -649,7 +680,7 @@ class MafIndex:
         """
         # validate strand
         if strand not in (1, -1):
-            raise ValueError("Strand must be 1 or -1, got %s" % str(strand))
+            raise ValueError(f"Strand must be 1 or -1, got {strand}")
 
         # pull all alignments that span the desired intervals
         fetched = list(self.search(starts, ends))
@@ -724,14 +755,14 @@ class MafIndex:
             # https://docs.python.org/2/tutorial/controlflow.html#break-and-continue-statements-and-else-clauses-on-loops
             else:
                 raise ValueError(
-                    "Did not find %s in alignment bundle" % (self._target_seqname,)
+                    f"Did not find {self._target_seqname} in alignment bundle"
                 )
 
             # the true, chromosome/contig/etc position in the target seqname
             real_pos = rec_start
 
             # loop over the alignment to fill split_by_position
-            for gapped_pos in range(0, rec_length):
+            for gapped_pos in range(rec_length):
                 for seqrec in multiseq:
                     # keep track of this position's value for the target seqname
                     if seqrec.id == self._target_seqname:

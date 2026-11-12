@@ -24,12 +24,9 @@ For drawing capabilities, this module uses reportlab to draw and write
 the diagram: http://www.reportlab.com
 """
 
-
-# GenomeDiagram
-from ._Feature import Feature
-
-# Builtins
 import re
+
+from ._Feature import Feature
 
 
 class FeatureSet:
@@ -186,12 +183,12 @@ class FeatureSet:
 
         """
         if not verbose:  # Short account only required
-            return "%s" % self
+            return f"{self}"
         else:  # Long account desired
-            outstr = ["\n<%s: %s>" % (self.__class__, self.name)]
+            outstr = [f"\n<{self.__class__}: {self.name}>"]
             outstr.append("%d features" % len(self.features))
             for key in self.features:
-                outstr.append("feature: %s" % self.features[key])
+                outstr.append(f"feature: {self.features[key]}")
             return "\n".join(outstr)
 
     def __len__(self):

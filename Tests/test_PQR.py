@@ -8,15 +8,17 @@
 # as part of this package.
 
 """Unit tests for the PQR parser in Bio.PDB module."""
-from Bio.PDB.PDBParser import PDBParser
+
+import os
+import tempfile
 import unittest
 import warnings
 from io import StringIO
-from Bio.PDB.PDBExceptions import PDBConstructionException, PDBConstructionWarning
-from Bio.PDB.PDBIO import PDBIO
 
-import tempfile
-import os
+from Bio.PDB.PDBExceptions import PDBConstructionException
+from Bio.PDB.PDBExceptions import PDBConstructionWarning
+from Bio.PDB.PDBIO import PDBIO
+from Bio.PDB.PDBParser import PDBParser
 
 
 class ParseSimplePQR(unittest.TestCase):
@@ -35,8 +37,8 @@ class ParseSimplePQR(unittest.TestCase):
         # Check that charge and radius are properly initallized
         self.assertEqual(atom.get_charge(), -0.1)
         self.assertEqual(atom.get_radius(), 1.0)
-        self.assertEqual(atom.get_occupancy(), None)
-        self.assertEqual(atom.get_bfactor(), None)
+        self.assertIsNone(atom.get_occupancy())
+        self.assertIsNone(atom.get_bfactor())
 
         # Coordinates
         for i in range(1, 3):
@@ -66,7 +68,7 @@ class ParseSimplePQR(unittest.TestCase):
             structure = parser.get_structure("test", StringIO(malformed))
 
         atom = next(structure.get_atoms())
-        self.assertEqual(atom.get_charge(), None)
+        self.assertIsNone(atom.get_charge())
 
         # Missing
         with warnings.catch_warnings(record=True) as w:
@@ -74,7 +76,7 @@ class ParseSimplePQR(unittest.TestCase):
             structure = parser.get_structure("test", StringIO(missing))
 
         atom = next(structure.get_atoms())
-        self.assertEqual(atom.get_charge(), None)
+        self.assertIsNone(atom.get_charge())
 
         # Test PERMISSIVE mode behaviour
         parser = PDBParser(PERMISSIVE=False, is_pqr=True)  # default initialization
@@ -99,7 +101,7 @@ class ParseSimplePQR(unittest.TestCase):
             structure = parser.get_structure("test", StringIO(malformed))
 
         atom = next(structure.get_atoms())
-        self.assertEqual(atom.get_radius(), None)
+        self.assertIsNone(atom.get_radius())
 
         # Missing
         with warnings.catch_warnings(record=True) as w:
@@ -107,7 +109,7 @@ class ParseSimplePQR(unittest.TestCase):
             structure = parser.get_structure("test", StringIO(missing))
 
         atom = next(structure.get_atoms())
-        self.assertEqual(atom.get_radius(), None)
+        self.assertIsNone(atom.get_radius())
 
         # Negative
         with warnings.catch_warnings(record=True) as w:
@@ -115,7 +117,7 @@ class ParseSimplePQR(unittest.TestCase):
             structure = parser.get_structure("test", StringIO(negative))
 
         atom = next(structure.get_atoms())
-        self.assertEqual(atom.get_radius(), None)
+        self.assertIsNone(atom.get_radius())
 
         # Test PERMISSIVE mode behaviour
         parser = PDBParser(PERMISSIVE=False, is_pqr=True)  # default initialization

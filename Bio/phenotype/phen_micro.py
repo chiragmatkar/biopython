@@ -24,9 +24,10 @@ Functions:
 
 """
 
-import warnings
-import json
 import csv
+import json
+import warnings
+
 import numpy as np
 
 from Bio import BiopythonParserWarning
@@ -93,7 +94,7 @@ class PlateRecord:
     Plate ID: PM01
     Well ID: B03
     Time points: 384
-    Minum signal 0.00 at time 11.00
+    Minimum signal 0.00 at time 11.00
     Maximum signal 76.25 at time 18.00
     WellRecord('(0.0, 11.0), (0.25, 11.0), (0.5, 11.0), (0.75, 11.0), (1.0, 11.0), ..., (95.75, 11.0)')
 
@@ -130,7 +131,7 @@ class PlateRecord:
     >>> plate == plate2
     True
 
-    Two PlateRecord object can be summed up or subracted from each other: the
+    Two PlateRecord object can be summed up or subtracted from each other: the
     the signals of each well will be summed up or subtracted. The id of the
     left operand will be kept:
 
@@ -182,7 +183,7 @@ class PlateRecord:
         # Value should be of WellRecord type
         if not isinstance(obj, WellRecord):
             raise ValueError(
-                "A WellRecord type object is needed as value (got %s)" % type(obj)
+                f"A WellRecord type object is needed as value (got {type(obj)})"
             )
 
     def __getitem__(self, index):
@@ -291,7 +292,7 @@ class PlateRecord:
             try:
                 return self._wells[index]
             except KeyError:
-                raise KeyError("Well %s not found!" % index)
+                raise KeyError(f"Well {index} not found!")
 
         # Integer index
         elif isinstance(index, int):
@@ -370,6 +371,7 @@ class PlateRecord:
             )
 
     def __setitem__(self, key, value):
+        """Set a well in this plate using its identifier as the key."""
         if not isinstance(key, str):
             raise ValueError("Well identifier should be string-like")
         self._is_well(value)
@@ -384,6 +386,7 @@ class PlateRecord:
         self._update()
 
     def __delitem__(self, key):
+        """Delete a well from this plate by its identifier."""
         if not isinstance(key, str):
             raise ValueError("Well identifier should be string-like")
         del self._wells[key]
@@ -391,10 +394,12 @@ class PlateRecord:
         self._update()
 
     def __iter__(self):
+        """Iterate over the wells in identifier order."""
         for well in sorted(self._wells):
             yield self._wells[well]
 
     def __contains__(self, wellid):
+        """Return whether this plate contains the given well identifier."""
         if wellid in self._wells:
             return True
         return False
@@ -404,6 +409,7 @@ class PlateRecord:
         return len(self._wells)
 
     def __eq__(self, other):
+        """Return whether the two plates contain the same wells."""
         if isinstance(other, self.__class__):
             return self._wells == other._wells
         else:
@@ -527,7 +533,7 @@ class PlateRecord:
                 self.__class__.__name__,
                 ", ".join(
                     [
-                        "%s['%s']" % (str(self[x].__class__.__name__), self[x].id)
+                        "%s['%s']" % (self[x].__class__.__name__, self[x].id)
                         for x in sorted(self._wells.keys())[:3]
                     ]
                 ),
@@ -542,7 +548,7 @@ class PlateRecord:
                 self.__class__.__name__,
                 ", ".join(
                     [
-                        "%s['%s']" % (str(self[x].__class__.__name__), self[x].id)
+                        "%s['%s']" % (self[x].__class__.__name__, self[x].id)
                         for x in sorted(self._wells.keys())
                     ]
                 ),
@@ -551,7 +557,7 @@ class PlateRecord:
     def __str__(self):
         """Return a human readable summary of the record (string).
 
-        The python built in function str works by calling the object's ___str__
+        The python built in function str works by calling the object's __str__
         method.  e.g.
 
         >>> from Bio import phenotype
@@ -567,7 +573,7 @@ class PlateRecord:
         """
         lines = []
         if self.id:
-            lines.append("Plate ID: %s" % self.id)
+            lines.append(f"Plate ID: {self.id}")
         lines.append("Well: %i" % len(self))
         # Here we assume that all well ID start with a char
         lines.append("Rows: %d" % len({x.id[0] for x in self}))
@@ -717,18 +723,20 @@ class WellRecord:
                 stop = time.stop
 
             time = np.arange(start, stop, time.step)
-            return list(self._interpolate(time))
+            return [float(value) for value in self._interpolate(time)]
 
-        elif isinstance(time, int) or isinstance(time, float):
-            return self._interpolate(time)
+        elif isinstance(time, (float, int)):
+            return float(self._interpolate(time))
 
         raise ValueError("Invalid index")
 
     def __iter__(self):
+        """Iterate over time-signal pairs in time order."""
         for time in sorted(self._signals.keys()):
             yield time, self._signals[time]
 
     def __eq__(self, other):
+        """Return whether the two wells have equal signals at each time."""
         if isinstance(other, self.__class__):
             if list(self._signals.keys()) != list(other._signals.keys()):
                 return False
@@ -802,7 +810,7 @@ class WellRecord:
     def __str__(self):
         """Return a human readable summary of the record (string).
 
-        The python built-in function str works by calling the object's ___str__
+        The python built-in function str works by calling the object's __str__
         method.  e.g.
 
         >>> from Bio import phenotype
@@ -812,7 +820,7 @@ class WellRecord:
         Plate ID: PM01
         Well ID: A05
         Time points: 384
-        Minum signal 0.25 at time 13.00
+        Minimum signal 0.25 at time 13.00
         Maximum signal 19.50 at time 23.00
         WellRecord('(0.0, 14.0), (0.25, 13.0), (0.5, 15.0), (0.75, 15.0), (1.0, 16.0), ..., (95.75, 16.0)')
 
@@ -820,11 +828,11 @@ class WellRecord:
         """
         lines = []
         if self.plate and self.plate.id:
-            lines.append("Plate ID: %s" % self.plate.id)
+            lines.append(f"Plate ID: {self.plate.id}")
         if self.id:
-            lines.append("Well ID: %s" % self.id)
+            lines.append(f"Well ID: {self.id}")
         lines.append("Time points: %i" % len(self))
-        lines.append("Minum signal %.2f at time %.2f" % min(self, key=lambda x: x[1]))
+        lines.append("Minimum signal %.2f at time %.2f" % min(self, key=lambda x: x[1]))
         lines.append("Maximum signal %.2f at time %.2f" % max(self, key=lambda x: x[1]))
         lines.append(repr(self))
         return "\n".join(lines)
@@ -876,11 +884,14 @@ class WellRecord:
             return
         for sigmoid_func in function:
             if sigmoid_func not in avail_func:
-                raise ValueError("Fitting function %r not supported" % sigmoid_func)
+                raise ValueError(f"Fitting function {sigmoid_func!r} not supported")
 
         # Parameters that depend on scipy curve_fit
-        from .pm_fitting import fit, get_area
-        from .pm_fitting import logistic, gompertz, richards
+        from .pm_fitting import fit
+        from .pm_fitting import get_area
+        from .pm_fitting import gompertz
+        from .pm_fitting import logistic
+        from .pm_fitting import richards
 
         function_map = {
             "logistic": logistic,
@@ -935,7 +946,7 @@ def JsonIterator(handle):
             _platesPrefixMammalian
         ):
             warnings.warn(
-                "Non-standard plate ID found (%s)" % plateID, BiopythonParserWarning
+                f"Non-standard plate ID found ({plateID})", BiopythonParserWarning
             )
         else:
             # Simplify the plates IDs, removing letters, as opm does
@@ -953,14 +964,13 @@ def JsonIterator(handle):
             # No luck
             if len(pID) == 0:
                 warnings.warn(
-                    "Non-standard plate ID found (%s)" % plateID, BiopythonParserWarning
+                    f"Non-standard plate ID found ({plateID})", BiopythonParserWarning
                 )
             elif int(pID) < 0:
                 warnings.warn(
-                    "Non-standard plate ID found (%s), using %s"
-                    % (plateID, _platesPrefix + abs(int(pID)))
+                    f"Non-standard plate ID found ({plateID}), using {_platesPrefix}{abs(int(pID))}"
                 )
-                plateID = _platesPrefix + abs(int(pID))
+                plateID = _platesPrefix + str(abs(int(pID)))
             else:
                 if plateID.startswith(_platesPrefixMammalian):
                     plateID = _platesPrefixMammalian + "%02d" % int(pID)
@@ -1037,7 +1047,7 @@ def CsvIterator(handle):
                 _platesPrefixMammalian
             ):
                 warnings.warn(
-                    "Non-standard plate ID found (%s)" % plateID, BiopythonParserWarning
+                    f"Non-standard plate ID found ({plateID})", BiopythonParserWarning
                 )
             else:
                 # Simplify the plates IDs, removing letters, as opm does
@@ -1055,15 +1065,14 @@ def CsvIterator(handle):
                 # No luck
                 if len(pID) == 0:
                     warnings.warn(
-                        "Non-standard plate ID found (%s)" % plateID,
+                        f"Non-standard plate ID found ({plateID})",
                         BiopythonParserWarning,
                     )
                 elif int(pID) < 0:
                     warnings.warn(
-                        "Non-standard plate ID found (%s), using %s"
-                        % (plateID, _platesPrefix + abs(int(pID)))
+                        f"Non-standard plate ID found ({plateID}), using {_platesPrefix}{abs(int(pID))}"
                     )
-                    plateID = _platesPrefix + abs(int(pID))
+                    plateID = _platesPrefix + str(abs(int(pID)))
                 else:
                     if plateID.startswith(_platesPrefixMammalian):
                         plateID = _platesPrefixMammalian + "%02d" % int(pID)
@@ -1107,7 +1116,7 @@ def CsvIterator(handle):
                 continue
             qualifiers[_csvData][_position] = line[1].strip()
 
-        elif _other in line[0].strip():
+        elif _setupTime in line[0].strip():
             if plate is None:
                 continue
             qualifiers[_csvData][_setupTime] = line[1].strip()

@@ -3,9 +3,10 @@
 # Revisions copyright 2009 by Cymon J. Cox.  All rights reserved.
 # Revisions copyright 2009 by Peter Cock.  All rights reserved.
 #
-# This code is part of the Biopython distribution and governed by its
-# license.  Please see the LICENSE file that should have been included
-# as part of this package.
+# This file is part of the Biopython distribution and governed by your
+# choice of the "Biopython License Agreement" or the "BSD 3-Clause License".
+# Please see the LICENSE file that should have been included as part of this
+# package.
 """Parser for PHD files output by PHRED and used by PHRAP and CONSED.
 
 This module can be used directly, which will return Record objects
@@ -16,7 +17,6 @@ internally.  This will give SeqRecord objects for each contig sequence.
 """
 
 from Bio import Seq
-
 
 CKEYWORDS = [
     "CHROMAT_FILE",
@@ -196,3 +196,9 @@ def _read(handle):
         record.seq_trimmed = record.seq[first:last]
 
     return record
+
+
+if __name__ == "__main__":
+    from Bio._utils import run_doctest
+
+    run_doctest()

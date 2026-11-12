@@ -8,6 +8,7 @@ Provides tests for the Graphics.Distribution classes which provide the
 ability to create graphics to show the distribution of information about
 BACs/chromosomes/etc.
 """
+
 # standard library
 import os
 import random
@@ -75,7 +76,7 @@ class BarChartTest(unittest.TestCase):
             dist_info.append(new_info)
 
             distribution = BarChartDistribution(dist_info)
-            distribution.chart_title = "Distribution %s" % (multi + 1)
+            distribution.chart_title = f"Distribution {multi + 1}"
             dist_page.distributions.append(distribution)
 
         dist_page.draw(self.multi_page, "Test Multi Bar Chart")

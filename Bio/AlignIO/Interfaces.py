@@ -61,10 +61,10 @@ class AlignmentIterator:
 
             with open("many.phy","r") as myFile:
                 for alignment in PhylipIterator(myFile):
-                    print "New alignment:"
+                    print("New alignment:")
                     for record in alignment:
-                        print record.id
-                        print record.seq
+                        print(record.id)
+                        print(record.seq)
 
         """
         return iter(self.__next__, None)
@@ -137,7 +137,6 @@ class SequentialAlignmentWriter(AlignmentWriter):
         This method should be replaced by any derived class to do something
         useful.
         """
-        pass
 
     def write_footer(self):
         """Use this to write any footer.
@@ -145,7 +144,6 @@ class SequentialAlignmentWriter(AlignmentWriter):
         This method should be replaced by any derived class to do something
         useful.
         """
-        pass
 
     def write_alignment(self, alignment):
         """Use this to write a single alignment.

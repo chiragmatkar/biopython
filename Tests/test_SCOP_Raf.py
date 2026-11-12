@@ -6,9 +6,9 @@
 """Unit test for Raf."""
 
 import unittest
+from io import StringIO
 
 from Bio.SCOP import Raf
-from io import StringIO
 
 
 class RafTests(unittest.TestCase):
@@ -78,9 +78,7 @@ class RafTests(unittest.TestCase):
         self.assertEqual(r.flags, "111011")
 
         r = index.getSeqMap("103m 1-10")
-        self.assertEqual(
-            r.pdbid, "103m",
-        )
+        self.assertEqual(r.pdbid, "103m")
         self.assertEqual(len(r.res), 10)
         self.assertEqual(r.pdb_datestamp, "010301")
         self.assertEqual(r.flags, "111011")

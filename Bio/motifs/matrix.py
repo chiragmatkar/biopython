@@ -12,32 +12,13 @@ and position-specific scoring matrices.
 """
 
 import math
+import numbers
 
-try:
-    import numpy as np
-except ImportError:
-    from Bio import MissingPythonDependencyError
-
-    raise MissingPythonDependencyError(
-        "Install NumPy if you want to use Bio.motifs.matrix."
-    )
+import numpy as np
 
 from Bio.Seq import Seq
 
-from . import _pwm
-
-
-def _calculate(score_dict, sequence, m):
-    """Calculate scores using C code (PRIVATE)."""
-    n = len(sequence)
-    # Create the numpy arrays here; the C module then does not rely on numpy
-    # Use a float32 for the scores array to save space
-    scores = np.empty(n - m + 1, np.float32)
-    logodds = np.array(
-        [[score_dict[letter][i] for letter in "ACGT"] for i in range(m)], float
-    )
-    _pwm.calculate(sequence, logodds, scores)
-    return scores
+from . import _pwm  # type: ignore
 
 
 class GenericPositionMatrix(dict):
@@ -51,7 +32,8 @@ class GenericPositionMatrix(dict):
                 self.length = len(values[letter])
             elif self.length != len(values[letter]):
                 raise Exception("data has inconsistent lengths")
-            self[letter] = list(values[letter])
+            # Cast any numpy floats into Python floats:
+            self[letter] = [float(_) for _ in values[letter]]
         self.alphabet = alphabet
 
     def __str__(self):
@@ -76,7 +58,7 @@ class GenericPositionMatrix(dict):
                     indices1 = range(start1, stop1, stride1)
                     letters1 = [self.alphabet[i] for i in indices1]
                     dim1 = 2
-                elif isinstance(key1, int):
+                elif isinstance(key1, numbers.Integral):
                     letter1 = self.alphabet[key1]
                     dim1 = 1
                 elif isinstance(key1, tuple):
@@ -89,16 +71,16 @@ class GenericPositionMatrix(dict):
                     else:
                         raise KeyError(key1)
                 else:
-                    raise KeyError("Cannot understand key %s", str(key1))
+                    raise KeyError("Cannot understand key %s" % key1)
                 if isinstance(key2, slice):
                     start2, stop2, stride2 = key2.indices(self.length)
                     indices2 = range(start2, stop2, stride2)
                     dim2 = 2
-                elif isinstance(key2, int):
+                elif isinstance(key2, numbers.Integral):
                     index2 = key2
                     dim2 = 1
                 else:
-                    raise KeyError("Cannot understand key %s", str(key2))
+                    raise KeyError("Cannot understand key %s" % key2)
                 if dim1 == 1 and dim2 == 1:
                     return dict.__getitem__(self, letter1)[index2]
                 elif dim1 == 1 and dim2 == 2:
@@ -127,7 +109,7 @@ class GenericPositionMatrix(dict):
             indices = range(start, stop, stride)
             letters = [self.alphabet[i] for i in indices]
             dim = 2
-        elif isinstance(key, int):
+        elif isinstance(key, numbers.Integral):
             letter = self.alphabet[key]
             dim = 1
         elif isinstance(key, tuple):
@@ -140,7 +122,7 @@ class GenericPositionMatrix(dict):
             else:
                 raise KeyError(key)
         else:
-            raise KeyError("Cannot understand key %s", str(key))
+            raise KeyError("Cannot understand key %s" % key)
         if dim == 1:
             return dict.__getitem__(self, letter)
         elif dim == 2:
@@ -192,23 +174,31 @@ class GenericPositionMatrix(dict):
             "C": "C",
             "G": "G",
             "T": "T",
+            "U": "U",
             "AC": "M",
             "AG": "R",
             "AT": "W",
+            "AU": "W",
             "CG": "S",
             "CT": "Y",
+            "CU": "Y",
             "GT": "K",
+            "GU": "K",
             "ACG": "V",
             "ACT": "H",
+            "ACU": "H",
             "AGT": "D",
+            "AGU": "D",
             "CGT": "B",
+            "CGU": "B",
             "ACGT": "N",
+            "ACGU": "N",
         }
         sequence = ""
         for i in range(self.length):
 
             def get(nucleotide):
-                return self[nucleotide][i]
+                return self[nucleotide][i]  # noqa: B023
 
             nucleotides = sorted(self, key=get, reverse=True)
             counts = [self[c][i] for c in nucleotides]
@@ -224,6 +214,76 @@ class GenericPositionMatrix(dict):
             nucleotide = degenerate_nucleotide.get(key, key)
             sequence += nucleotide
         return Seq(sequence)
+
+    def calculate_consensus(
+        self, substitution_matrix=None, plurality=None, identity=0, setcase=None
+    ):
+        """Return the consensus sequence (as a string) for the given parameters.
+
+        This function largely follows the conventions of the EMBOSS `cons` tool.
+
+        Arguments:
+         - substitution_matrix - the scoring matrix used when comparing
+           sequences. By default, it is None, in which case we simply count the
+           frequency of each letter.
+           Instead of the default value, you can use the substitution matrices
+           available in Bio.Align.substitution_matrices. Common choices are
+           BLOSUM62 (also known as EBLOSUM62) for protein, and NUC.4.4 (also
+           known as EDNAFULL) for nucleotides. NOTE: This has not yet been
+           implemented.
+         - plurality           - threshold value for the number of positive
+           matches, divided by the total count in a column, required to reach
+           consensus. If substitution_matrix is None, then this argument must
+           be None, and is ignored; a ValueError is raised otherwise. If
+           substitution_matrix is not None, then the default value of the
+           plurality is 0.5.
+         - identity            - number of identities, divided by the total
+           count in a column, required to define a consensus value. If the
+           number of identities is less than identity * total count in a column,
+           then the undefined character ('N' for nucleotides and 'X' for amino
+           acid sequences) is used in the consensus sequence. If identity is
+           1.0, then only columns of identical letters contribute to the
+           consensus. Default value is zero.
+         - setcase             - threshold for the positive matches, divided by
+           the total count in a column, above which the consensus is in
+           upper-case and below which the consensus is in lower-case. By
+           default, this is equal to 0.5.
+        """
+        alphabet = self.alphabet
+        if set(alphabet).union("ACGTUN-") == set("ACGTUN-"):
+            undefined = "N"
+        else:
+            undefined = "X"
+        if substitution_matrix is None:
+            if plurality is not None:
+                raise ValueError(
+                    "plurality must be None if substitution_matrix is None"
+                )
+            sequence = ""
+            for i in range(self.length):
+                maximum = 0
+                total = 0
+                for letter in alphabet:
+                    count = self[letter][i]
+                    total += count
+                    if count > maximum:
+                        maximum = count
+                        consensus_letter = letter
+                if maximum < identity * total:
+                    consensus_letter = undefined
+                else:
+                    if setcase is None:
+                        setcase_threshold = total / 2
+                    else:
+                        setcase_threshold = setcase * total
+                    if maximum <= setcase_threshold:
+                        consensus_letter = consensus_letter.lower()
+                sequence += consensus_letter
+        else:
+            raise NotImplementedError(
+                "calculate_consensus currently only supports substitution_matrix=None"
+            )
+        return sequence
 
     @property
     def gc_content(self):
@@ -292,7 +352,7 @@ class PositionWeightMatrix(GenericPositionMatrix):
         """Initialize the class."""
         GenericPositionMatrix.__init__(self, alphabet, counts)
         for i in range(self.length):
-            total = sum(float(self[letter][i]) for letter in alphabet)
+            total = sum(self[letter][i] for letter in alphabet)
             for letter in alphabet:
                 self[letter][i] /= total
         for letter in alphabet:
@@ -347,7 +407,7 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
          - the search is performed only on one strand
          - if the sequence and the motif have the same length, a single
            number is returned
-         - otherwise, the result is a one-dimensional list or numpy array
+         - otherwise, the result is a one-dimensional numpy array
 
         """
         # TODO - Code itself tolerates ambiguous bases (as NaN).
@@ -359,16 +419,40 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
         # NOTE: The C code handles mixed case input as this could be large
         # (e.g. contig or chromosome), so requiring it be all upper or lower
         # case would impose an overhead to allocate the extra memory.
-        sequence = str(sequence)
+        try:
+            sequence = bytes(sequence)
+        except TypeError:  # str
+            try:
+                sequence = bytes(sequence, "ASCII")
+            except TypeError:
+                raise ValueError(
+                    "sequence should be a Seq, MutableSeq, string, or bytes-like object"
+                ) from None
+            except UnicodeEncodeError:
+                raise ValueError(
+                    "sequence should contain ASCII characters only"
+                ) from None
+        except Exception:
+            raise ValueError(
+                "sequence should be a Seq, MutableSeq, string, or bytes-like object"
+            ) from None
+
+        n = len(sequence)
         m = self.length
-        scores = _calculate(self, sequence, m)
+        # Create the numpy arrays here; the C module then does not rely on numpy
+        # Use a float32 for the scores array to save space
+        scores = np.empty(n - m + 1, np.float32)
+        logodds = np.array(
+            [[self[letter][i] for letter in "ACGT"] for i in range(m)], float
+        )
+        _pwm.calculate(sequence, logodds, scores)
 
         if len(scores) == 1:
             return scores[0]
         else:
             return scores
 
-    def search(self, sequence, threshold=0.0, both=True, chunksize=10 ** 6):
+    def search(self, sequence, threshold=0.0, both=True, chunksize=10**6):
         """Find hits with PWM score above given threshold.
 
         A generator function, returning found hits in the given sequence
@@ -409,7 +493,7 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
         """
         score = 0.0
         letters = self.alphabet
-        for position in range(0, self.length):
+        for position in range(self.length):
             score += max(self[letter][position] for letter in letters)
         return score
 
@@ -421,7 +505,7 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
         """
         score = 0.0
         letters = self.alphabet
-        for position in range(0, self.length):
+        for position in range(self.length):
             score += min(self[letter][position] for letter in letters)
         return score
 
@@ -525,7 +609,7 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
         denominator = math.sqrt((sxx - sx * sx) * (syy - sy * sy))
         return numerator / denominator
 
-    def distribution(self, background=None, precision=10 ** 3):
+    def distribution(self, background=None, precision=10**3):
         """Calculate the distribution of the scores at the given precision."""
         from .thresholds import ScoreDistribution
 

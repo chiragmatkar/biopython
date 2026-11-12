@@ -10,8 +10,10 @@
 import re
 
 from Bio.SearchIO._index import SearchIndexer
-from Bio.SearchIO._model import QueryResult, Hit, HSP, HSPFragment
-
+from Bio.SearchIO._model import Hit
+from Bio.SearchIO._model import HSP
+from Bio.SearchIO._model import HSPFragment
+from Bio.SearchIO._model import QueryResult
 
 __all__ = ("BlastTabIndexer", "BlastTabParser", "BlastTabWriter")
 
@@ -175,7 +177,6 @@ def _compute_gapopen_num(hsp):
 def _augment_blast_hsp(hsp, attr):
     """Calculate the given HSP attribute, for writing (PRIVATE)."""
     if not hasattr(hsp, attr) and not attr.endswith("_pct"):
-
         # aln_span is number of identical matches + mismatches + gaps
         if attr == "aln_span":
             hsp.aln_span = hsp.ident_num + hsp.mismatch_num + hsp.gap_num
@@ -196,13 +197,13 @@ def _augment_blast_hsp(hsp, attr):
 
     # if the attr is a percent value, calculate it
     if attr == "ident_pct":
-        hsp.ident_pct = hsp.ident_num / float(hsp.aln_span) * 100
+        hsp.ident_pct = hsp.ident_num / hsp.aln_span * 100
 
     elif attr == "pos_pct":
-        hsp.pos_pct = hsp.pos_num / float(hsp.aln_span) * 100
+        hsp.pos_pct = hsp.pos_num / hsp.aln_span * 100
 
     elif attr == "gap_pct":
-        hsp.gap_pct = hsp.gap_num / float(hsp.aln_span) * 100
+        hsp.gap_pct = hsp.gap_num / hsp.aln_span * 100
 
 
 class BlastTabParser:
@@ -863,13 +864,13 @@ class BlastTabWriter:
         except AttributeError:
             program_line = "# %s" % program
         else:
-            program_line = "# %s %s" % (program, version)
+            program_line = f"# {program} {version}"
         comments.append(program_line)
         # description may or may not be None
         if qres.description is None:
             comments.append("# Query: %s" % qres.id)
         else:
-            comments.append("# Query: %s %s" % (qres.id, qres.description))
+            comments.append(f"# Query: {qres.id} {qres.description}")
         # try appending RID line, if present
         try:
             comments.append("# RID: %s" % qres.rid)

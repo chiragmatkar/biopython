@@ -11,19 +11,19 @@
 
 """Translation code for graphical Xbbtools tool."""
 
-
 import time
 
-from Bio.Seq import Seq, reverse_complement, translate
-from Bio.SeqUtils import GC
+from Bio.Seq import reverse_complement
+from Bio.Seq import Seq
+from Bio.Seq import translate
+from Bio.SeqUtils import gc_fraction
 
 
 class xbb_translations:
     """A class for doing translations."""
 
     def __init__(self):
-        """Initialize."""
-        pass
+        """Initialize the class."""
 
     def frame1(self, seq, translation_table=1):
         """Translate first reading frame."""
@@ -93,16 +93,16 @@ class xbb_translations:
 
     def gc(self, seq):
         """Calculate GC content in percent (0-100)."""
-        return GC(seq)
+        return 100 * gc_fraction(seq)
 
     def gcframe(self, seq, translation_table=1, direction="both"):
-        """Print a pretty print tranlation in several frames."""
+        """Print a pretty print translation in several frames."""
         # always use uppercase nt-sequence !!
         comp = self.complement(seq)
         anti = self.reverse(comp)
         length = len(seq)
         frames = {}
-        for i in range(0, 3):
+        for i in range(3):
             frames[i + 1] = self.frame1(seq[i:], translation_table)
             frames[-(i + 1)] = self.reverse(self.frame1(anti[i:], translation_table))
 

@@ -6,12 +6,11 @@
 """Unit tests for Bio.Phylo functions with external dependencies."""
 
 import unittest
-
 from io import StringIO
-from Bio import Phylo
 
 # Check for any missing dependencies at the top level so we can skip
 from Bio import MissingExternalDependencyError
+from Bio import Phylo
 
 try:
     import matplotlib
@@ -52,7 +51,9 @@ class UtilTests(unittest.TestCase):
         # Fancier options
         Phylo.draw(apaf, do_show=False, branch_labels={apaf.root: "Root"})
         Phylo.draw(
-            apaf, do_show=False, branch_labels=lambda c: c.branch_length  # noqa: E731
+            apaf,
+            do_show=False,
+            branch_labels=lambda c: c.branch_length,  # noqa: E731
         )
 
     def test_draw_with_label_colors_dict(self):
@@ -64,14 +65,8 @@ class UtilTests(unittest.TestCase):
         pyplot.ioff()  # Turn off interactive display
         dollo = Phylo.read(EX_DOLLO, "phyloxml")
         apaf = Phylo.read(EX_APAF, "phyloxml")
-        label_colors_dollo = {
-            "f_50": "red",
-            "f_34": "blue",
-        }
-        label_colors_apaf = {
-            "22_MOUSE": "red",
-            "18_NEMVE": "blue",
-        }
+        label_colors_dollo = {"f_50": "red", "f_34": "blue"}
+        label_colors_apaf = {"22_MOUSE": "red", "18_NEMVE": "blue"}
         Phylo.draw(dollo, label_colors=label_colors_dollo, do_show=False)
         Phylo.draw(apaf, label_colors=label_colors_apaf, do_show=False)
 

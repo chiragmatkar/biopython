@@ -12,7 +12,6 @@ The KGML definition is as of release KGML v0.7.1
 Classes:
 """
 
-
 import os
 import tempfile
 from io import BytesIO
@@ -120,7 +119,7 @@ class KGMLCanvas:
         show_reaction_entries=True,
         margins=(0.02, 0.02),
     ):
-        """Initialize."""
+        """Initialize the class."""
         self.pathway = pathway
         self.show_maps = show_maps
         self.show_orthologs = show_orthologs
@@ -231,12 +230,12 @@ class KGMLCanvas:
             else:
                 self.drawing.setLineWidth(1)
             p.moveTo(x, y)
-            for (x, y) in graphics.coords:
+            for x, y in graphics.coords:
                 p.lineTo(x, y)
             self.drawing.drawPath(p)
             self.drawing.setLineWidth(1)  # Return to default
         # KGML defines the (x, y) coordinates as the centre of the circle/
-        # rectangle/roundrectangle, but Reportlab uses the co-ordinates of the
+        # rectangle/roundrectangle, but Reportlab uses the coordinates of the
         # lower-left corner for rectangle/elif.
         if graphics.type == "circle":
             self.drawing.circle(
@@ -275,7 +274,7 @@ class KGMLCanvas:
             # maybe even parameterising it to a proportion of the total line
             # length.
             mid_idx = len(graphics.coords) * 0.5
-            if not int(mid_idx) == mid_idx:
+            if int(mid_idx) != mid_idx:
                 idx1, idx2 = int(mid_idx - 0.5), int(mid_idx + 0.5)
             else:
                 idx1, idx2 = int(mid_idx - 1), int(mid_idx)
@@ -402,7 +401,7 @@ class KGMLCanvas:
         Draws an arrow from the g_from Entry object to the g_to
         Entry object; both must have Graphics objects.
         """
-        # Centre and bound co-ordinates for the from and two objects
+        # Centre and bound coordinates for the from and two objects
         bounds_from, bounds_to = g_from.bounds, g_to.bounds
         centre_from = (
             0.5 * (bounds_from[0][0] + bounds_from[1][0]),

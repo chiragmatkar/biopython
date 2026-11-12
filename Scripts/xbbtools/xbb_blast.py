@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Copyright 2000 by Thomas Sicheritz-Ponten.
-# Copyrigth 2016 by Markus Piotrowski.
+# Copyright 2016 by Markus Piotrowski.
 # All rights reserved.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
@@ -11,20 +11,17 @@
 
 """BLAST code for graphical Xbbtools tool."""
 
-
 import glob
 import os
-import sys
 import subprocess
-
+import sys
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import filedialog
 from tkinter import messagebox
 
-
-from xbb_utils import NotePad
 import xbb_blastbg
+from xbb_utils import NotePad
 
 
 class BlastIt:

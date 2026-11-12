@@ -2,33 +2,36 @@
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
-
 """Additional unit tests for Bio.SeqIO.QualityIO (covering FASTQ and QUAL)."""
-
 
 import os
 import unittest
 import warnings
-
-from io import StringIO
 from io import BytesIO
+from io import StringIO
 
-from Bio import BiopythonWarning, BiopythonParserWarning
-from Bio.SeqIO import QualityIO
+from test_SeqIO import SeqIOConverterTestBaseClass
+from test_SeqIO import SeqIOTestBaseClass
+
+from Bio import BiopythonParserWarning
+from Bio import BiopythonWarning
 from Bio import SeqIO
-from Bio.Seq import Seq, UnknownSeq, MutableSeq
+from Bio.Data.IUPACData import ambiguous_dna_letters
+from Bio.Data.IUPACData import ambiguous_rna_letters
+from Bio.Seq import MutableSeq
+from Bio.Seq import Seq
+from Bio.Seq import UndefinedSequenceError
+from Bio.SeqIO import QualityIO
 from Bio.SeqRecord import SeqRecord
-from Bio.Data.IUPACData import ambiguous_dna_letters, ambiguous_rna_letters
-
-from test_SeqIO import SeqIOTestBaseClass, SeqIOConverterTestBaseClass
 
 
 class QualityIOTestBaseClass(SeqIOTestBaseClass):
     def compare_record(self, old, new, fmt=None, msg=None):
-        """Quality aware SeqRecord comparison.
+        """Quality-aware SeqRecord comparison.
 
         This will check the mapping between Solexa and PHRED scores.
-        It knows to ignore UnknownSeq objects for string matching (i.e. QUAL files).
+        It knows to ignore records with undefined sequences  for string
+        matching (i.e. QUAL files) via the base class.
         """
         super().compare_record(old, new, msg=None)
         if fmt in ["fastq-solexa", "fastq-illumina"]:
@@ -46,9 +49,9 @@ class QualityIOTestBaseClass(SeqIOTestBaseClass):
             if truncate is not None and q_old != q_new:
                 q_old = [min(q, truncate) for q in q_old]
                 q_new = [min(q, truncate) for q in q_new]
-            err_msg = "mismatch in %s" % keyword
+            err_msg = f"mismatch in {keyword}"
             if msg is not None:
-                err_msg = "%s: %s" % (msg, err_msg)
+                err_msg = f"{msg}: {err_msg}"
             self.assertEqual(q_old, q_new, msg=err_msg)
 
         q_old = old.letter_annotations.get("phred_quality")
@@ -59,9 +62,9 @@ class QualityIOTestBaseClass(SeqIOTestBaseClass):
             converted = [round(QualityIO.solexa_quality_from_phred(q)) for q in q_old]
             if truncate is not None:
                 converted = [min(q, truncate) for q in converted]
-            err_msg = "mismatch converting phred_quality %s to solexa_quality" % q_old
+            err_msg = f"mismatch converting phred_quality {q_old} to solexa_quality"
             if msg is not None:
-                err_msg = "%s: %s" % (msg, err_msg)
+                err_msg = f"{msg}: {err_msg}"
             self.assertEqual(converted, q_new, msg=err_msg)
 
         q_old = old.letter_annotations.get("solexa_quality")
@@ -72,9 +75,9 @@ class QualityIOTestBaseClass(SeqIOTestBaseClass):
             converted = [round(QualityIO.phred_quality_from_solexa(q)) for q in q_old]
             if truncate is not None:
                 converted = [min(q, truncate) for q in converted]
-            err_msg = "mismatch converting solexa_quality %s to phred_quality" % q_old
+            err_msg = f"mismatch converting solexa_quality {q_old} to phred_quality"
             if msg is not None:
-                err_msg = "%s: %s" % (msg, err_msg)
+                err_msg = f"{msg}: {err_msg}"
             self.assertEqual(converted, q_new, msg=err_msg)
 
 
@@ -84,7 +87,7 @@ class TestFastqErrors(unittest.TestCase):
     def check_fails(self, filename, good_count, formats=None, raw=True):
         if not formats:
             formats = ["fastq-sanger", "fastq-solexa", "fastq-illumina"]
-        msg = "SeqIO.parse failed to detect error in %s" % filename
+        msg = f"SeqIO.parse failed to detect error in {filename}"
         for fmt in formats:
             records = SeqIO.parse(filename, fmt)
             for i in range(good_count):
@@ -96,7 +99,7 @@ class TestFastqErrors(unittest.TestCase):
 
     def check_general_fails(self, filename, good_count):
         tuples = QualityIO.FastqGeneralIterator(filename)
-        msg = "FastqGeneralIterator failed to detect error in %s" % filename
+        msg = f"FastqGeneralIterator failed to detect error in {filename}"
         for i in range(good_count):
             title, seq, qual = next(tuples)  # Make sure no errors!
         # Detect error in the next record:
@@ -107,7 +110,7 @@ class TestFastqErrors(unittest.TestCase):
         tuples = QualityIO.FastqGeneralIterator(filename)
         # This "raw" parser doesn't check the ASCII characters which means
         # certain invalid FASTQ files will get parsed without errors.
-        msg = "FastqGeneralIterator failed to parse %s" % filename
+        msg = f"FastqGeneralIterator failed to parse {filename}"
         count = 0
         for title, seq, qual in tuples:
             self.assertEqual(len(seq), len(qual), msg=msg)
@@ -168,7 +171,7 @@ class TestReferenceSffConversions(unittest.TestCase):
             self.assertEqual(old.id, new.id)
             self.assertEqual(old.name, new.name)
             if fmt != "qual":
-                self.assertEqual(str(old.seq), str(new.seq))
+                self.assertEqual(old.seq, new.seq)
             elif fmt != "fasta":
                 self.assertEqual(
                     old.letter_annotations["phred_quality"],
@@ -221,10 +224,10 @@ class TestReferenceFastqConversions(unittest.TestCase):
 
     def simple_check(self, base_name, in_variant):
         for out_variant in ["sanger", "solexa", "illumina"]:
-            in_filename = "Quality/%s_original_%s.fastq" % (base_name, in_variant)
+            in_filename = f"Quality/{base_name}_original_{in_variant}.fastq"
             self.assertTrue(os.path.isfile(in_filename))
             # Load the reference output...
-            with open("Quality/%s_as_%s.fastq" % (base_name, out_variant)) as handle:
+            with open(f"Quality/{base_name}_as_{out_variant}.fastq") as handle:
                 expected = handle.read()
 
             with warnings.catch_warnings():
@@ -271,6 +274,13 @@ class TestQual(QualityIOTestBaseClass):
         records2 = list(SeqIO.parse("Quality/example.fastq", "fastq"))
         self.compare_records(records1, records2)
 
+    def test_qual_empty_title(self):
+        """Check QUAL record with empty title."""
+        record = SeqIO.read(StringIO(">\n1 2 3"), "qual")
+        self.assertEqual(record.id, "")
+        self.assertEqual(record.description, "")
+        self.assertEqual(record.letter_annotations["phred_quality"], [1, 2, 3])
+
     def test_qual(self):
         """Check FASTQ parsing matches QUAL parsing."""
         records1 = list(SeqIO.parse("Quality/example.qual", "qual"))
@@ -314,7 +324,15 @@ class TestQual(QualityIOTestBaseClass):
         h2 = StringIO()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", BiopythonParserWarning)
-            self.assertEqual(4, SeqIO.convert(h, "qual", h2, "fastq"))
+            records = SeqIO.parse(h, "qual")
+
+            def add_sequence(records):
+                for record in records:
+                    record.seq = Seq(len(record.seq) * "?")
+                    yield record
+
+            records = add_sequence(records)
+            self.assertEqual(4, SeqIO.write(records, h2, "fastq"))
         self.assertEqual(
             h2.getvalue(),
             """\
@@ -343,7 +361,7 @@ class TestReadWrite(unittest.TestCase):
 
     def test_fastq_2000(self):
         """Read and write back simple example with upper case 2000bp read."""
-        data = "@%s\n%s\n+\n%s\n" % ("id descr goes here", "ACGT" * 500, "!@a~" * 500)
+        data = f"@{'id descr goes here'}\n{'ACGT' * 500}\n+\n{'!@a~' * 500}\n"
         handle = StringIO()
         self.assertEqual(
             1, SeqIO.write(SeqIO.parse(StringIO(data), "fastq"), handle, "fastq")
@@ -419,6 +437,11 @@ class TestWriteRead(QualityIOTestBaseClass):
 
     def write_read(self, filename, in_format, out_format):
         records = list(SeqIO.parse(filename, in_format))
+        for record in records:
+            try:
+                bytes(record.seq)
+            except UndefinedSequenceError:
+                record.seq = Seq("N" * len(record.seq))
         mode = self.get_mode(out_format)
         if mode == "b":
             handle = BytesIO()
@@ -445,7 +468,7 @@ class TestWriteRead(QualityIOTestBaseClass):
             letter_annotations={"phred_quality": [0, 5, 5, 10] * 1000},
         )
         record3 = SeqRecord(
-            UnknownSeq(2000, character="N"),
+            Seq("N" * 2000),
             id="Unk",
             description="l" + ("o" * 1000) + "ng",
             letter_annotations={"phred_quality": [0, 1] * 1000},
@@ -852,12 +875,12 @@ class MappingTests(unittest.TestCase):
         # solexa_quality_from_phred function directly. For speed it uses a
         # cached dictionary of the mappings.
         seq = "N" * 94
-        qual = "".join(chr(33 + q) for q in range(0, 94))
+        qual = "".join(chr(33 + q) for q in range(94))
         expected_sol = [
             min(62, int(round(QualityIO.solexa_quality_from_phred(q))))
-            for q in range(0, 94)
+            for q in range(94)
         ]
-        in_handle = StringIO("@Test\n%s\n+\n%s" % (seq, qual))
+        in_handle = StringIO(f"@Test\n{seq}\n+\n{qual}")
         out_handle = StringIO()
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always", BiopythonWarning)
@@ -867,7 +890,7 @@ class MappingTests(unittest.TestCase):
             self.assertLessEqual(len(w), 1, w)
         out_handle.seek(0)
         record = SeqIO.read(out_handle, "fastq-solexa")
-        self.assertEqual(str(record.seq), seq)
+        self.assertEqual(record.seq, seq)
         self.assertEqual(record.letter_annotations["solexa_quality"], expected_sol)
 
     def test_solexa_to_sanger(self):
@@ -880,20 +903,20 @@ class MappingTests(unittest.TestCase):
         expected_phred = [
             round(QualityIO.phred_quality_from_solexa(q)) for q in range(-5, 63)
         ]
-        in_handle = StringIO("@Test\n%s\n+\n%s" % (seq, qual))
+        in_handle = StringIO(f"@Test\n{seq}\n+\n{qual}")
         out_handle = StringIO()
         SeqIO.write(SeqIO.parse(in_handle, "fastq-solexa"), out_handle, "fastq-sanger")
         out_handle.seek(0)
         record = SeqIO.read(out_handle, "fastq-sanger")
-        self.assertEqual(str(record.seq), seq)
+        self.assertEqual(record.seq, seq)
         self.assertEqual(record.letter_annotations["phred_quality"], expected_phred)
 
     def test_sanger_to_illumina(self):
         """Mapping check for FASTQ Sanger (0 to 93) to Illumina (0 to 62)."""
         seq = "N" * 94
-        qual = "".join(chr(33 + q) for q in range(0, 94))
-        expected_phred = [min(62, q) for q in range(0, 94)]
-        in_handle = StringIO("@Test\n%s\n+\n%s" % (seq, qual))
+        qual = "".join(chr(33 + q) for q in range(94))
+        expected_phred = [min(62, q) for q in range(94)]
+        in_handle = StringIO(f"@Test\n{seq}\n+\n{qual}")
         out_handle = StringIO()
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always", BiopythonWarning)
@@ -903,22 +926,22 @@ class MappingTests(unittest.TestCase):
             self.assertLessEqual(len(w), 1, w)
         out_handle.seek(0)
         record = SeqIO.read(out_handle, "fastq-illumina")
-        self.assertEqual(str(record.seq), seq)
+        self.assertEqual(record.seq, seq)
         self.assertEqual(record.letter_annotations["phred_quality"], expected_phred)
 
     def test_illumina_to_sanger(self):
         """Mapping check for FASTQ Illumina (0 to 62) to Sanger (0 to 62)."""
         seq = "N" * 63
-        qual = "".join(chr(64 + q) for q in range(0, 63))
+        qual = "".join(chr(64 + q) for q in range(63))
         expected_phred = list(range(63))
-        in_handle = StringIO("@Test\n%s\n+\n%s" % (seq, qual))
+        in_handle = StringIO(f"@Test\n{seq}\n+\n{qual}")
         out_handle = StringIO()
         SeqIO.write(
             SeqIO.parse(in_handle, "fastq-illumina"), out_handle, "fastq-sanger"
         )
         out_handle.seek(0)
         record = SeqIO.read(out_handle, "fastq-sanger")
-        self.assertEqual(str(record.seq), seq)
+        self.assertEqual(record.seq, seq)
         self.assertEqual(record.letter_annotations["phred_quality"], expected_phred)
 
 
@@ -928,7 +951,7 @@ class TestSFF(unittest.TestCase):
     def test_overlapping_clip(self):
         record = next(SeqIO.parse("Roche/greek.sff", "sff"))
         self.assertEqual(len(record), 395)
-        s = str(record.seq.lower())
+        s = record.seq.lower()
         # Apply overlapping clipping
         record.annotations["clip_qual_left"] = 51
         record.annotations["clip_qual_right"] = 44
@@ -951,7 +974,7 @@ class TestSFF(unittest.TestCase):
         self.assertEqual(record.annotations["clip_adapter_left"], 50)
         self.assertEqual(record.annotations["clip_adapter_right"], 75)
         self.assertEqual(len(record), 395)
-        self.assertEqual(s, str(record.seq.lower()))
+        self.assertEqual(s, record.seq.lower())
         # And check with trimming applied...
         h.seek(0)
         with warnings.catch_warnings(record=True) as w:
@@ -976,21 +999,20 @@ class TestSFF(unittest.TestCase):
 
 
 class NonFastqTests(unittest.TestCase):
-    def check_wrong_format(self, filename):
+    def test_fasta_as_fastq(self):
         for f in ("fastq", "fastq-sanger", "fastq-solexa", "fastq-illumina"):
-            generator = SeqIO.parse(filename, f)
+            generator = SeqIO.parse("Fasta/elderberry.nu", f)
             self.assertRaises(ValueError, next, generator)
 
-    def test_fasta_as_fastq(self):
-        self.check_wrong_format("Fasta/elderberry.nu")
-
     def test_sff_as_fastq(self):
-        self.check_wrong_format("Roche/greek.sff")
+        for f in ("fastq", "fastq-sanger", "fastq-solexa", "fastq-illumina"):
+            generator = SeqIO.parse("Roche/greek.sff", f)
+            self.assertRaises(ValueError, next, generator)
 
 
 class TestsConverter(SeqIOConverterTestBaseClass, QualityIOTestBaseClass):
     def check_conversion(self, filename, in_format, out_format):
-        msg = "Convert %s from %s to %s" % (filename, in_format, out_format)
+        msg = f"Convert {filename} from {in_format} to {out_format}"
         records = list(SeqIO.parse(filename, in_format))
         # Write it out...
         handle = StringIO()
@@ -1040,7 +1062,7 @@ class TestsConverter(SeqIOConverterTestBaseClass, QualityIOTestBaseClass):
             SeqIO.convert(filename, in_format, handle, out_format)
         err2 = str(cm.exception)
         # Verify that parse/write and convert give the same failure
-        err_msg = "%s: parse/write and convert gave different failures" % msg
+        err_msg = f"{msg}: parse/write and convert gave different failures"
         self.assertEqual(err1, err2, msg=err_msg)
 
     def test_conversion(self):
@@ -1054,7 +1076,7 @@ class TestsConverter(SeqIOConverterTestBaseClass, QualityIOTestBaseClass):
             ("Quality/illumina_faked.fastq", "fastq-illumina"),
         ]
         for filename, fmt in tests:
-            for (in_format, out_format) in self.formats:
+            for in_format, out_format in self.formats:
                 if in_format != fmt:
                     continue
                 self.check_conversion(filename, in_format, out_format)
@@ -1085,7 +1107,7 @@ class TestsConverter(SeqIOConverterTestBaseClass, QualityIOTestBaseClass):
             ("Quality/error_double_qual.fastq", "fastq"),
         ]
         for filename, fmt in tests:
-            for (in_format, out_format) in self.formats:
+            for in_format, out_format in self.formats:
                 if in_format != fmt:
                     continue
                 if (

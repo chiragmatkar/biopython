@@ -7,12 +7,12 @@
 
 """Half-sphere exposure and coordination number calculation."""
 
-
 import warnings
 from math import pi
 
 from Bio.PDB.AbstractPropertyMap import AbstractPropertyMap
-from Bio.PDB.Polypeptide import CaPPBuilder, is_aa
+from Bio.PDB.Polypeptide import CaPPBuilder
+from Bio.PDB.Polypeptide import is_aa
 from Bio.PDB.vectors import rotaxis
 
 
@@ -25,7 +25,7 @@ class _AbstractHSExposure(AbstractPropertyMap):
     """
 
     def __init__(self, model, radius, offset, hse_up_key, hse_down_key, angle_key=None):
-        """Initialize.
+        """Initialize class.
 
         :param model: model
         :type model: L{Model}
@@ -56,7 +56,7 @@ class _AbstractHSExposure(AbstractPropertyMap):
         hse_list = []
         hse_keys = []
         for pp1 in ppl:
-            for i in range(0, len(pp1)):
+            for i in range(len(pp1)):
                 if i == 0:
                     r1 = None
                 else:
@@ -76,7 +76,7 @@ class _AbstractHSExposure(AbstractPropertyMap):
                 hse_d = 0
                 ca2 = r2["CA"].get_vector()
                 for pp2 in ppl:
-                    for j in range(0, len(pp2)):
+                    for j in range(len(pp2)):
                         if pp1 is pp2 and abs(i - j) <= offset:
                             # neighboring residues in the chain are ignored
                             continue
@@ -140,7 +140,7 @@ class HSExposureCA(_AbstractHSExposure):
     """
 
     def __init__(self, model, radius=12, offset=0):
-        """Initialse class.
+        """Initialize class.
 
         :param model: the model that contains the residues
         :type model: L{Model}
@@ -225,12 +225,12 @@ class HSExposureCA(_AbstractHSExposure):
             fp.write("from pymol import cmd\n")
             fp.write("obj=[\n")
             fp.write("BEGIN, LINES,\n")
-            fp.write("COLOR, %.2f, %.2f, %.2f,\n" % (1.0, 1.0, 1.0))
-            for (ca, cb) in self.ca_cb_list:
+            fp.write(f"COLOR, {1.0:.2f}, {1.0:.2f}, {1.0:.2f},\n")
+            for ca, cb in self.ca_cb_list:
                 x, y, z = ca.get_array()
-                fp.write("VERTEX, %.2f, %.2f, %.2f,\n" % (x, y, z))
+                fp.write(f"VERTEX, {x:.2f}, {y:.2f}, {z:.2f},\n")
                 x, y, z = cb.get_array()
-                fp.write("VERTEX, %.2f, %.2f, %.2f,\n" % (x, y, z))
+                fp.write(f"VERTEX, {x:.2f}, {y:.2f}, {z:.2f},\n")
             fp.write("END]\n")
             fp.write("cmd.load_cgo(obj, 'HS')\n")
 
@@ -275,10 +275,10 @@ class ExposureCN(AbstractPropertyMap):
     """Residue exposure as number of CA atoms around its CA atom."""
 
     def __init__(self, model, radius=12.0, offset=0):
-        """Initialize.
+        """Initialize class.
 
         A residue's exposure is defined as the number of CA atoms around
-        that residues CA atom. A dictionary is returned that uses a L{Residue}
+        that residue's CA atom. A dictionary is returned that uses a L{Residue}
         object as key, and the residue exposure as corresponding value.
 
         :param model: the model that contains the residues
@@ -299,14 +299,14 @@ class ExposureCN(AbstractPropertyMap):
         fs_list = []
         fs_keys = []
         for pp1 in ppl:
-            for i in range(0, len(pp1)):
+            for i in range(len(pp1)):
                 fs = 0
                 r1 = pp1[i]
                 if not is_aa(r1) or not r1.has_id("CA"):
                     continue
                 ca1 = r1["CA"]
                 for pp2 in ppl:
-                    for j in range(0, len(pp2)):
+                    for j in range(len(pp2)):
                         if pp1 is pp2 and abs(i - j) <= offset:
                             continue
                         r2 = pp2[j]

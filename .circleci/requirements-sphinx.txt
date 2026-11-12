@@ -1,0 +1,10 @@
+mmtf-python
+mysql-connector-python-rf
+numpy
+rdflib
+reportlab<4.0
+scipy
+numpydoc==1.7.0
+pygments
+sphinx==7.3.7
+sphinx_rtd_theme==3.0.0

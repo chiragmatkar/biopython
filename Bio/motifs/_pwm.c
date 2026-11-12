@@ -6,13 +6,14 @@
  * package.
  */
 
+#define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <math.h>
 
 
 static void
-calculate(const char sequence[], int s, Py_ssize_t m, double* matrix,
-          Py_ssize_t n, float* scores)
+calculate(const char sequence[], Py_ssize_t m, double* matrix, Py_ssize_t n,
+          float* scores)
 {
     Py_ssize_t i, j;
     char c;
@@ -157,28 +158,29 @@ py_calculate(PyObject* self, PyObject* args, PyObject* keywords)
     static char* kwlist[] = {"sequence", "matrix", "scores", NULL};
     Py_ssize_t m;
     Py_ssize_t n;
-    int s;
+    Py_ssize_t s;
     PyObject* result = NULL;
     Py_buffer scores;
     Py_buffer matrix;
 
     matrix.obj = NULL;
     scores.obj = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, keywords, "s#O&O&", kwlist,
-                                     &sequence,
-                                     &s,
+    if (!PyArg_ParseTupleAndKeywords(args, keywords, "y#O&O&", kwlist,
+                                     &sequence, &s,
                                      matrix_converter, &matrix,
                                      scores_converter, &scores)) return NULL;
     m = matrix.shape[0];
     n = scores.shape[0];
     if (n == s - m + 1) {
-        calculate(sequence, s, m, matrix.buf, n, scores.buf);
+        calculate(sequence, m, matrix.buf, n, scores.buf);
         Py_INCREF(Py_None);
         result = Py_None;
     }
     else {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "size of scores array is inconsistent");
+        PyErr_Format(PyExc_RuntimeError,
+                    "size of scores array is inconsistent "
+                    "(sequence length is %zd, "
+                    "motif length is %zd, scores length is %zd", s, m, n);
     }
 
     matrix_converter(NULL, &matrix);
@@ -192,7 +194,7 @@ static struct PyMethodDef methods[] = {
     METH_VARARGS | METH_KEYWORDS,
     PyDoc_STR(calculate__doc__),
    },
-   {NULL, NULL, 0, NULL} // sentinel
+   {NULL, NULL, 0, NULL} /* sentinel */
 };
 
 static struct PyModuleDef moduledef = {

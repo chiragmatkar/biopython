@@ -21,35 +21,24 @@ Command line options::
 By default, all tests are run.
 """
 
-
 # standard modules
-import sys
-import os
+import doctest
+import gc
 import getopt
+import os
+import sys
 import time
 import traceback
 import unittest
-import doctest
-import distutils.util
-import gc
-from io import BytesIO
-from pkgutil import iter_modules
-from setuptools import find_packages
 from io import StringIO
+from pkgutil import iter_modules
+
+from setuptools import find_packages
 
 try:
-    import numpy
-
-    try:
-        # NumPy 1.14 changed repr output breaking our doctests,
-        # request the legacy 1.13 style
-        numpy.set_printoptions(legacy="1.13")
-    except TypeError:
-        # Old Numpy, output should be fine as it is :)
-        # TypeError: set_printoptions() got an unexpected keyword argument 'legacy'
-        pass
+    import numpy as np
 except ImportError:
-    numpy = None
+    np = None
 
 
 # The default verbosity (not verbose)
@@ -64,11 +53,13 @@ EXCLUDE_DOCTEST_MODULES = ["Bio.Alphabet"]
 ONLINE_DOCTEST_MODULES = [
     "Bio.Entrez",
     "Bio.ExPASy",
+    "Bio.ExPASy.cellosaurus",
     "Bio.TogoWS",
+    "Bio.UniProt",
 ]
 
 # Silently ignore any doctests for modules requiring numpy!
-if numpy is None:
+if np is None:
     EXCLUDE_DOCTEST_MODULES.extend(
         [
             "Bio.Affy.CelFile",
@@ -96,7 +87,6 @@ if numpy is None:
             "Bio.PDB.PDBParser",
             "Bio.PDB.Polypeptide",
             "Bio.PDB.PSEA",
-            "Bio.PDB.QCPSuperimposer",
             "Bio.PDB.Residue",
             "Bio.PDB.Selection",
             "Bio.PDB.StructureAlignment",
@@ -109,7 +99,6 @@ if numpy is None:
             "Bio.phenotype.phen_micro",
             "Bio.phenotype.pm_fitting",
             "Bio.SeqIO.PdbIO",
-            "Bio.Statistics.lowess",
             "Bio.SVDSuperimposer",
         ]
     )
@@ -141,23 +130,6 @@ SYSTEM_LANG = os.environ.get("LANG", "C")  # Cache this
 
 def main(argv):
     """Run tests, return number of failures (integer)."""
-    # insert our paths in sys.path:
-    # ../build/lib.*
-    # ..
-    # Q. Why this order?
-    # A. To find the C modules (which are in ../build/lib.*/Bio)
-    # Q. Then, why ".."?
-    # A. Because Martel may not be in ../build/lib.*
-    test_path = sys.path[0] or "."
-    source_path = os.path.abspath("%s/.." % test_path)
-    sys.path.insert(1, source_path)
-    build_path = os.path.abspath(
-        "%s/../build/lib.%s-%s"
-        % (test_path, distutils.util.get_platform(), sys.version[:3])
-    )
-    if os.access(build_path, os.F_OK):
-        sys.path.insert(1, build_path)
-
     # Using "export LANG=C" (which should work on Linux and similar) can
     # avoid problems detecting optional command line tools on
     # non-English OS (we may want 'command not found' in English).
@@ -208,8 +180,8 @@ def main(argv):
         if args[arg_num][-3:] == ".py":
             args[arg_num] = args[arg_num][:-3]
 
-    print("Python version: %s" % sys.version)
-    print("Operating system: %s %s" % (os.name, sys.platform))
+    print(f"Python version: {sys.version}")
+    print(f"Operating system: {os.name} {sys.platform}")
 
     # run the tests
     runner = TestRunner(args, verbosity)
@@ -217,7 +189,6 @@ def main(argv):
 
 
 class TestRunner(unittest.TextTestRunner):
-
     if __name__ == "__main__":
         file = sys.argv[0]
     else:
@@ -253,14 +224,13 @@ class TestRunner(unittest.TextTestRunner):
         unittest.TextTestRunner.__init__(self, stream, verbosity=verbosity)
 
     def runTest(self, name):
-        from Bio import MissingPythonDependencyError
         from Bio import MissingExternalDependencyError
+        from Bio import MissingPythonDependencyError
 
         result = self._makeResult()
         output = StringIO()
         # Restore the language and thus default encoding (in case a prior
         # test changed this, e.g. to help with detecting command line tools)
-        global SYSTEM_LANG
         os.environ["LANG"] = SYSTEM_LANG
         # Always run tests from the Tests/ folder where run_tests.py
         # should be located (as we assume this with relative paths etc)
@@ -270,7 +240,7 @@ class TestRunner(unittest.TextTestRunner):
             sys.stdout = output
             if name.startswith("test_"):
                 # It's a unittest
-                sys.stderr.write("%s ... " % name)
+                sys.stderr.write(f"{name} ... ")
                 loader = unittest.TestLoader()
                 suite = loader.loadTestsFromName(name)
                 if hasattr(loader, "errors") and loader.errors:
@@ -284,18 +254,18 @@ class TestRunner(unittest.TextTestRunner):
                             # Remove the traceback etc
                             msg = msg[msg.find("Bio.Missing") :]
                             msg = msg[msg.find("Error: ") :]
-                            sys.stderr.write("skipping. %s\n" % msg)
+                            sys.stderr.write(f"skipping. {msg}\n")
                             return True
                     # Looks like a real failure
                     sys.stderr.write("loading tests failed:\n")
                     for msg in loader.errors:
-                        sys.stderr.write("%s\n" % msg)
+                        sys.stderr.write(f"{msg}\n")
                     return False
                 if suite.countTestCases() == 0:
-                    raise RuntimeError("No tests found in %s" % name)
+                    raise RuntimeError(f"No tests found in {name}")
             else:
                 # It's a doc test
-                sys.stderr.write("%s docstring test ... " % name)
+                sys.stderr.write(f"{name} docstring test ... ")
                 try:
                     module = __import__(name, fromlist=name.split("."))
                 except MissingPythonDependencyError:
@@ -303,7 +273,7 @@ class TestRunner(unittest.TextTestRunner):
                     return True
                 except ImportError as e:
                     sys.stderr.write("FAIL, ImportError\n")
-                    result.stream.write("ERROR while importing %s: %s\n" % (name, e))
+                    result.stream.write(f"ERROR while importing {name}: {e}\n")
                     result.printErrors()
                     return False
                 suite = doctest.DocTestSuite(module, optionflags=doctest.ELLIPSIS)
@@ -312,11 +282,11 @@ class TestRunner(unittest.TextTestRunner):
             if self.testdir != os.path.abspath("."):
                 sys.stderr.write("FAIL\n")
                 result.stream.write(result.separator1 + "\n")
-                result.stream.write("ERROR: %s\n" % name)
+                result.stream.write(f"ERROR: {name}\n")
                 result.stream.write(result.separator2 + "\n")
                 result.stream.write("Current directory changed\n")
-                result.stream.write("Was: %s\n" % self.testdir)
-                result.stream.write("Now: %s\n" % os.path.abspath("."))
+                result.stream.write(f"Was: {self.testdir}\n")
+                result.stream.write(f"Now: {os.path.abspath('.')}\n")
                 os.chdir(self.testdir)
                 if not result.wasSuccessful():
                     result.printErrors()
@@ -331,13 +301,13 @@ class TestRunner(unittest.TextTestRunner):
         except MissingExternalDependencyError as msg:
             # Seems this isn't always triggered on Python 3.5,
             # exception messages can be in loader.errors instead.
-            sys.stderr.write("skipping. %s\n" % msg)
+            sys.stderr.write(f"skipping. {msg}\n")
             return True
-        except Exception as msg:
+        except Exception as msg:  # noqa: BLE001
             # This happened during the import
             sys.stderr.write("ERROR\n")
             result.stream.write(result.separator1 + "\n")
-            result.stream.write("ERROR: %s\n" % name)
+            result.stream.write(f"ERROR: {name}\n")
             result.stream.write(result.separator2 + "\n")
             result.stream.write(traceback.format_exc())
             return False

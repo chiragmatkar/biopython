@@ -18,12 +18,15 @@ Functions:
 
 """
 
+from io import StringIO
 from xml.etree import ElementTree
 
-from io import StringIO
-
-from Bio.KEGG.KGML.KGML_pathway import Component, Entry, Graphics
-from Bio.KEGG.KGML.KGML_pathway import Pathway, Reaction, Relation
+from Bio.KEGG.KGML.KGML_pathway import Component
+from Bio.KEGG.KGML.KGML_pathway import Entry
+from Bio.KEGG.KGML.KGML_pathway import Graphics
+from Bio.KEGG.KGML.KGML_pathway import Pathway
+from Bio.KEGG.KGML.KGML_pathway import Reaction
+from Bio.KEGG.KGML.KGML_pathway import Relation
 
 
 def read(handle):
@@ -174,10 +177,11 @@ class KGMLParser:
             else:
                 # This should warn us of any unimplemented tags
                 import warnings
+
                 from Bio import BiopythonParserWarning
 
                 warnings.warn(
-                    "Warning: tag %s not implemented in parser" % element.tag,
+                    f"Warning: tag {element.tag} not implemented in parser",
                     BiopythonParserWarning,
                 )
         return self.pathway

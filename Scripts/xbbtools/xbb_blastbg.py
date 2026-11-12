@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Copyright 2000 by Thomas Sicheritz-Ponten.
-# Copyrigth 2016 by Markus Piotrowski.
+# Copyright 2016 by Markus Piotrowski.
 # All rights reserved.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
@@ -11,20 +11,17 @@
 
 """BLAST code for graphical Xbbtools tool."""
 
-
 import os
 import tempfile
 import threading
+from tkinter import messagebox
+from tkinter import Tk
 
-from tkinter import Tk, messagebox
-
-from Bio.Blast.Applications import (
-    NcbiblastnCommandline,
-    NcbiblastpCommandline,
-    NcbiblastxCommandline,
-    NcbitblastnCommandline,
-    NcbitblastxCommandline,
-)
+from Bio.Blast.Applications import NcbiblastnCommandline
+from Bio.Blast.Applications import NcbiblastpCommandline
+from Bio.Blast.Applications import NcbiblastxCommandline
+from Bio.Blast.Applications import NcbitblastnCommandline
+from Bio.Blast.Applications import NcbitblastxCommandline
 
 
 class BlastDisplayer:
@@ -103,7 +100,7 @@ class BlastDisplayer:
                 self.tid.insert("end", txt)
                 self.tid.update()
             except Exception:
-                # text widget is detroyed, we assume the search
+                # text widget is destroyed, we assume the search
                 # has been cancelled
                 pass
         self.Exit()

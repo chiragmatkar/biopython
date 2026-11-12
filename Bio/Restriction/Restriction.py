@@ -10,7 +10,7 @@
 
 """Restriction Enzyme classes.
 
-Notes about the diverses class of the restriction enzyme implementation::
+Notes about the diverse class of the restriction enzyme implementation::
 
             RestrictionType is the type of all restriction enzymes.
         -----------------------------------------------------------------------
@@ -82,46 +82,18 @@ Notes about the diverses class of the restriction enzyme implementation::
 
 """
 
-
+import itertools
+import re
+import string
 import warnings
 
-import re
-import itertools
-
-from Bio.Seq import Seq, MutableSeq
-from Bio.Restriction.Restriction_Dictionary import rest_dict as enzymedict
-from Bio.Restriction.Restriction_Dictionary import typedict
-from Bio.Restriction.Restriction_Dictionary import suppliers as suppliers_dict
-from Bio.Restriction.PrintFormat import PrintFormat
 from Bio import BiopythonWarning
-
-
-# Used to use Bio.Restriction.DNAUtils.check_bases (and expose it under this
-# namespace), but have deprecated that module.
-
-
-def _check_bases(seq_string):
-    """Check characters in a string (PRIVATE).
-
-    Remove digits and white space present in string. Allows any valid ambiguous
-    IUPAC DNA single letters codes (ABCDGHKMNRSTVWY, lower case are converted).
-
-    Other characters (e.g. symbols) trigger a TypeError.
-
-    Returns the string WITH A LEADING SPACE (!). This is for backwards
-    compatibility, and may in part be explained by the fact that
-    ``Bio.Restriction`` doesn't use zero based counting.
-    """
-    # Remove white space and make upper case:
-    seq_string = "".join(seq_string.split()).upper()
-    # Remove digits
-    for c in "0123456789":
-        seq_string = seq_string.replace(c, "")
-    # Check only allowed IUPAC letters
-    if not set(seq_string).issubset(set("ABCDGHKMNRSTVWY")):
-        raise TypeError("Invalid character found in %r" % seq_string)
-    return " " + seq_string
-
+from Bio.Restriction.PrintFormat import PrintFormat
+from Bio.Restriction.Restriction_Dictionary import rest_dict as enzymedict
+from Bio.Restriction.Restriction_Dictionary import suppliers as suppliers_dict
+from Bio.Restriction.Restriction_Dictionary import typedict
+from Bio.Seq import MutableSeq
+from Bio.Seq import Seq
 
 matching = {
     "A": "ARWMHVDN",
@@ -144,6 +116,17 @@ matching = {
 DNA = Seq
 
 
+def _make_FormattedSeq_table() -> bytes:
+    table = bytearray(256)
+    upper_to_lower = ord("A") - ord("a")
+    # Only allow alphabetic characters
+    # (although only ACGT are used for finding restriction sites)
+    for c in b"ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        table[c] = c  # map uppercase to uppercase
+        table[c - upper_to_lower] = c  # map lowercase to uppercase
+    return bytes(table)
+
+
 class FormattedSeq:
     """A linear or circular sequence object for restriction analysis.
 
@@ -157,6 +140,9 @@ class FormattedSeq:
     circular. Restriction sites are search over the edges of circular sequence.
     """
 
+    _remove_chars = string.whitespace.encode() + string.digits.encode()
+    _table = _make_FormattedSeq_table()
+
     def __init__(self, seq, linear=True):
         """Initialize ``FormattedSeq`` with sequence and topology (optional).
 
@@ -165,10 +151,13 @@ class FormattedSeq:
         will have no effect on the shape of the sequence.
         """
         if isinstance(seq, (Seq, MutableSeq)):
-            stringy = str(seq)
-            self.lower = stringy.islower()
+            self.lower = seq.islower()
+            data = bytes(seq)
+            self.data = data.translate(self._table, delete=self._remove_chars)
+            if 0 in self.data:  # Check if all letters were IUPAC
+                raise TypeError(f"Invalid character found in {data.decode()}")
             # Note this adds a leading space to the sequence (!)
-            self.data = _check_bases(stringy)
+            self.data = " " + self.data.decode("ASCII")
             self.linear = linear
             self.klass = seq.__class__
         elif isinstance(seq, FormattedSeq):
@@ -177,7 +166,7 @@ class FormattedSeq:
             self.linear = seq.linear
             self.klass = seq.klass
         else:
-            raise TypeError("expected Seq or MutableSeq, got %s" % type(seq))
+            raise TypeError(f"expected Seq or MutableSeq, got {type(seq)}")
 
     def __len__(self):
         """Return length of ``FormattedSeq``.
@@ -188,7 +177,7 @@ class FormattedSeq:
 
     def __repr__(self):
         """Represent ``FormattedSeq`` class as a string."""
-        return "FormattedSeq(%r, linear=%r)" % (self[1:], self.linear)
+        return f"FormattedSeq({self[1:]!r}, linear={self.linear!r})"
 
     def __eq__(self, other):
         """Implement equality operator for ``FormattedSeq`` object."""
@@ -202,12 +191,10 @@ class FormattedSeq:
     def circularise(self):
         """Circularise sequence in place."""
         self.linear = False
-        return
 
     def linearise(self):
         """Linearise sequence in place."""
         self.linear = True
-        return
 
     def to_linear(self):
         """Make a new instance of sequence as linear."""
@@ -272,7 +259,7 @@ class RestrictionType(type):
         See below.
         """
         if "-" in name:
-            raise ValueError("Problem with hyphen in %r as enzyme name" % name)
+            raise ValueError(f"Problem with hyphen in {name!r} as enzyme name")
         # 2011/11/26 - Nobody knows what this call was supposed to accomplish,
         # but all unit tests seem to pass without it.
         # super().__init__(cls, name, bases, dct)
@@ -285,7 +272,7 @@ class RestrictionType(type):
             pass
         except Exception:
             raise ValueError(
-                "Problem with regular expression, re.compiled(%r)" % cls.compsite
+                f"Problem with regular expression, re.compiled({cls.compsite!r})"
             ) from None
 
     def __add__(cls, other):
@@ -354,7 +341,7 @@ class RestrictionType(type):
 
         Used with eval or exec will instantiate the enzyme.
         """
-        return "%s" % cls.__name__
+        return f"{cls.__name__}"
 
     def __len__(cls):
         """Return length of recognition site of enzyme as int."""
@@ -433,7 +420,7 @@ class RestrictionType(type):
         True
         """
         if not isinstance(other, RestrictionType):
-            raise TypeError("expected RestrictionType, got %s instead" % type(other))
+            raise TypeError(f"expected RestrictionType, got {type(other)} instead")
         return cls._mod1(other)
 
     def __ge__(cls, other):
@@ -552,11 +539,39 @@ class AbstractCut(RestrictionType):
             return cls._search()
 
     @classmethod
+    def _drop(cls):
+        """Remove cuts that are outside of the sequence (PRIVATE).
+
+        For internal use only.
+
+        Drop the site that are situated outside the sequence in linear
+        sequence. Modify the index for site in circular sequences.
+        """
+        length = len(cls.dna)
+        if cls.dna.is_linear():
+
+            def filtering_function(cut_on_watson):
+                cut_on_crick = cut_on_watson - cls.ovhg
+                return (1 < cut_on_watson <= length) and (1 < cut_on_crick <= length)
+
+            cls.results = [cut for cut in cls.results if filtering_function(cut)]
+        else:
+            for index, location in enumerate(cls.results):
+                if location < 1:
+                    cls.results[index] += length
+                else:
+                    break
+            for index, location in enumerate(cls.results[::-1]):
+                if location > length:
+                    cls.results[-(index + 1)] -= length
+                else:
+                    break
+
+    @classmethod
     def all_suppliers(cls):
         """Print all the suppliers of restriction enzyme."""
         supply = sorted(x[0] for x in suppliers_dict.values())
         print(",\n".join(supply))
-        return
 
     @classmethod
     def is_equischizomer(cls, other):
@@ -661,7 +676,7 @@ class NoCut(AbstractCut):
     """Implement the methods specific to the enzymes that do not cut.
 
     These enzymes are generally enzymes that have been only partially
-    characterised and the way they cut the DNA is unknow or enzymes for
+    characterised and the way they cut the DNA is unknown or enzymes for
     which the pattern of cut is to complex to be recorded in Rebase
     (ncuts values of 0 in emboss_e.###).
 
@@ -964,7 +979,7 @@ class Palindromic(AbstractCut):
 
     @classmethod
     def is_palindromic(cls):
-        """Return if the enzyme has a palindromic recoginition site."""
+        """Return if the enzyme has a palindromic recognition site."""
         return True
 
 
@@ -1006,7 +1021,7 @@ class NonPalindromic(AbstractCut):
 
     @classmethod
     def is_palindromic(cls):
-        """Return if the enzyme has a palindromic recoginition site."""
+        """Return if the enzyme has a palindromic recognition site."""
         return False
 
 
@@ -1030,7 +1045,7 @@ class Unknown(AbstractCut):
         If linear is False, the sequence is considered to be circular and the
         output will be modified accordingly.
         """
-        raise NotImplementedError("%s restriction is unknown." % cls.__name__)
+        raise NotImplementedError(f"{cls.__name__} restriction is unknown.")
 
     catalyze = catalyse
 
@@ -1516,42 +1531,6 @@ class Defined(AbstractCut):
     """
 
     @classmethod
-    def _drop(cls):
-        """Remove cuts that are outsite of the sequence (PRIVATE).
-
-        For internal use only.
-
-        Drop the site that are situated outside the sequence in linear
-        sequence. Modify the index for site in circular sequences.
-        """
-        #
-        #   remove or modify the results that are outside the sequence.
-        #   This is necessary since after finding the site we add the distance
-        #   from the site to the cut with the _modify and _rev_modify methods.
-        #   For linear we will remove these sites altogether.
-        #   For circular sequence, we modify the result rather than _drop it
-        #   since the site is in the sequence.
-        #
-        length = len(cls.dna)
-        drop = itertools.dropwhile
-        take = itertools.takewhile
-        if cls.dna.is_linear():
-            cls.results = list(drop(lambda x: x <= 1, cls.results))
-            cls.results = list(take(lambda x: x <= length, cls.results))
-        else:
-            for index, location in enumerate(cls.results):
-                if location < 1:
-                    cls.results[index] += length
-                else:
-                    break
-            for index, location in enumerate(cls.results[::-1]):
-                if location > length:
-                    cls.results[-(index + 1)] -= length
-                else:
-                    break
-        return
-
-    @classmethod
     def is_defined(cls):
         """Return if recognition sequence and cut are defined.
 
@@ -1673,34 +1652,6 @@ class Ambiguous(AbstractCut):
     """
 
     @classmethod
-    def _drop(cls):
-        """Remove cuts that are outsite of the sequence (PRIVATE).
-
-        For internal use only.
-
-        Drop the site that are situated outside the sequence in linear
-        sequence. Modify the index for site in circular sequences.
-        """
-        length = len(cls.dna)
-        drop = itertools.dropwhile
-        take = itertools.takewhile
-        if cls.dna.is_linear():
-            cls.results = list(drop(lambda x: x <= 1, cls.results))
-            cls.results = list(take(lambda x: x <= length, cls.results))
-        else:
-            for index, location in enumerate(cls.results):
-                if location < 1:
-                    cls.results[index] += length
-                else:
-                    break
-            for index, location in enumerate(cls.results[::-1]):
-                if location > length:
-                    cls.results[-(index + 1)] -= length
-                else:
-                    break
-        return
-
-    @classmethod
     def is_defined(cls):
         """Return if recognition sequence and cut are defined.
 
@@ -1811,7 +1762,7 @@ class Ambiguous(AbstractCut):
             elif 0 <= f3 + length <= length:
                 re = "N^" + abs(f5) * "N" + site[:f3] + "_" + site[f3:]
             elif f3 + length < 0:
-                re = "N^" * abs(f5) * "N" + "_" + abs(length + f3) * "N" + site
+                re = "N^" + abs(f5) * "N" + "_" + abs(length + f3) * "N" + site
             elif f5 > length:
                 re = site + (f5 - length) * "N" + "^" + (length + f3 - f5) * "N" + "_N"
             else:
@@ -1864,18 +1815,7 @@ class NotDefined(AbstractCut):
         if cls.dna.is_linear():
             return
         else:
-            length = len(cls.dna)
-            for index, location in enumerate(cls.results):
-                if location < 1:
-                    cls.results[index] += length
-                else:
-                    break
-            for index, location in enumerate(cls.results[:-1]):
-                if location > length:
-                    cls.results[-(index + 1)] -= length
-                else:
-                    break
-        return
+            super()._drop()
 
     @classmethod
     def is_defined(cls):
@@ -1964,7 +1904,7 @@ class NotDefined(AbstractCut):
         >>>
 
         """
-        return "? %s ?" % cls.site
+        return f"? {cls.site} ?"
 
 
 class Commercially_available(AbstractCut):
@@ -1983,7 +1923,6 @@ class Commercially_available(AbstractCut):
         """Print a list of suppliers of the enzyme."""
         for s in cls.suppl:
             print(suppliers_dict[s][0] + ",")
-        return
 
     @classmethod
     def supplier_list(cls):
@@ -1996,7 +1935,6 @@ class Commercially_available(AbstractCut):
 
         Not implemented yet.
         """
-        return
 
     @classmethod
     def is_comm(cls):
@@ -2053,7 +1991,7 @@ class RestrictionBatch(set):
     def __init__(self, first=(), suppliers=()):
         """Initialize empty RB or pre-fill with enzymes (from supplier)."""
         first = [self.format(x) for x in first]
-        first += [eval(x) for n in suppliers for x in suppliers_dict[n][1]]
+        first += [globals()[x] for n in suppliers for x in suppliers_dict[n][1]]
         set.__init__(self, first)
         self.mapping = dict.fromkeys(self)
         self.already_mapped = None
@@ -2070,7 +2008,7 @@ class RestrictionBatch(set):
 
     def __repr__(self):
         """Represent ``RestrictionBatch`` class as a string for debugging."""
-        return "RestrictionBatch(%s)" % self.elements()
+        return f"RestrictionBatch({self.elements()})"
 
     def __contains__(self, other):
         """Implement ``in`` for ``RestrictionBatch``."""
@@ -2117,7 +2055,7 @@ class RestrictionBatch(set):
             self.add(e)
             return e
         else:
-            raise ValueError("enzyme %s is not in RestrictionBatch" % e.__name__)
+            raise ValueError(f"enzyme {e.__name__} is not in RestrictionBatch")
 
     def lambdasplit(self, func):
         """Filter enzymes in batch with supplied function.
@@ -2141,8 +2079,9 @@ class RestrictionBatch(set):
         supplier = suppliers_dict[letter]
         self.suppliers.append(letter)
         for x in supplier[1]:
-            self.add_nocheck(eval(x))
-        return
+            enzyme = globals()[x]
+            assert isinstance(enzyme, RestrictionType)
+            self.add_nocheck(enzyme)
 
     def current_suppliers(self):
         """List the current suppliers for the restriction batch.
@@ -2162,7 +2101,7 @@ class RestrictionBatch(set):
         return self
 
     def __add__(self, other):
-        """Overide '+' for use with sets.
+        """Override '+' for use with sets.
 
         b + other -> new RestrictionBatch.
         """
@@ -2197,25 +2136,25 @@ class RestrictionBatch(set):
         """Evaluate enzyme (name) and return it (as RestrictionType).
 
         If y is a RestrictionType return y.
-        If y can be evaluated to a RestrictionType return eval(y).
+        If y can be evaluated to a RestrictionType return the class.
         Raise a ValueError in all other case.
         """
         try:
             if isinstance(y, RestrictionType):
                 return y
-            elif isinstance(eval(str(y)), RestrictionType):
-                return eval(y)
-        except (NameError, SyntaxError):
+            elif isinstance(globals()[str(y)], RestrictionType):
+                return globals()[str(y)]
+        except (NameError, KeyError):
             pass
-        raise ValueError("%s is not a RestrictionType" % y.__class__)
+        raise ValueError(f"{y.__class__} is not a RestrictionType")
 
     def is_restriction(self, y):
         """Return if enzyme (name) is a known enzyme.
 
-        True if y or eval(y) is a RestrictionType.
+        True if y is a RestrictionType class, or a string which is.
         """
-        return isinstance(y, RestrictionType) or isinstance(
-            eval(str(y)), RestrictionType
+        return isinstance(y, RestrictionType) or (
+            str(y) in globals() and isinstance(globals()[str(y)], RestrictionType)
         )
 
     def split(self, *classes, **bool):
@@ -2260,7 +2199,7 @@ class RestrictionBatch(set):
 
     @classmethod
     def suppl_codes(cls):
-        """Return a dicionary with supplier codes.
+        """Return a dictionary with supplier codes.
 
         Letter code for the suppliers.
         """
@@ -2272,7 +2211,6 @@ class RestrictionBatch(set):
         """Print a list of supplier codes."""
         supply = [" = ".join(i) for i in cls.suppl_codes().items()]
         print("\n".join(supply))
-        return
 
     def search(self, dna, linear=True):
         """Return a dic of cutting sites in the seq for the batch enzymes."""
@@ -2303,9 +2241,7 @@ class RestrictionBatch(set):
                 self.already_mapped = str(dna), dna.linear
                 self.mapping = {x: x.search(dna) for x in self}
                 return self.mapping
-        raise TypeError(
-            "Expected Seq or MutableSeq instance, got %s instead" % type(dna)
-        )
+        raise TypeError(f"Expected Seq or MutableSeq instance, got {type(dna)} instead")
 
 
 ###############################################################################
@@ -2341,7 +2277,7 @@ class Analysis(RestrictionBatch, PrintFormat):
 
     def __repr__(self):
         """Represent ``Analysis`` class as a string."""
-        return "Analysis(%r,%r,%s)" % (self.rb, self.sequence, self.linear)
+        return f"Analysis({self.rb!r},{self.sequence!r},{self.linear})"
 
     def _sub_set(self, wanted):
         """Filter result for keys which are in wanted (PRIVATE).
@@ -2361,9 +2297,9 @@ class Analysis(RestrictionBatch, PrintFormat):
         search to only part of the sequence given to analyse.
         """
         if not isinstance(start, int):
-            raise TypeError("expected int, got %s instead" % type(start))
+            raise TypeError(f"expected int, got {type(start)} instead")
         if not isinstance(end, int):
-            raise TypeError("expected int, got %s instead" % type(end))
+            raise TypeError(f"expected int, got {type(end)} instead")
         if start < 1:  # Looks like this tries to do python list like indexing
             start += len(self.sequence)
         if end < 1:
@@ -2437,11 +2373,10 @@ class Analysis(RestrictionBatch, PrintFormat):
                 setattr(self, k, v)
             elif k in ("Cmodulo", "PrefWidth"):
                 raise AttributeError(
-                    "To change %s, change NameWidth and/or ConsoleWidth" % k
+                    f"To change {k}, change NameWidth and/or ConsoleWidth"
                 )
             else:
-                raise AttributeError("Analysis has no attribute %s" % k)
-        return
+                raise AttributeError(f"Analysis has no attribute {k}")
 
     def full(self, linear=True):
         """Perform analysis with all enzymes of batch and return all results.
@@ -2502,7 +2437,7 @@ class Analysis(RestrictionBatch, PrintFormat):
         """Return only results from enzymes which names are listed."""
         for i, enzyme in enumerate(names):
             if enzyme not in AllEnzymes:
-                warnings.warn("no data for the enzyme: %s" % enzyme, BiopythonWarning)
+                warnings.warn(f"no data for the enzyme: {enzyme}", BiopythonWarning)
                 del names[i]
         if not dct:
             return RestrictionBatch(names).search(self.sequence, self.linear)
@@ -2662,19 +2597,19 @@ for TYPE, (bases, enzymes) in typedict.items():
     #
     #   First eval the bases.
     #
-    bases = tuple(eval(x) for x in bases)
+    bases2 = tuple(globals()[x] for x in bases)
     #
     #   now create the particular value of RestrictionType for the classes
     #   in enzymes.
     #
-    T = type.__new__(RestrictionType, "RestrictionType", bases, {})
+    T = type.__new__(RestrictionType, "RestrictionType", bases2, {})
     for k in enzymes:
         #
         #   Now, we go through all the enzymes and assign them their type.
         #   enzymedict[k] contains the values of the attributes for this
         #   particular class (self.site, self.ovhg,....).
         #
-        newenz = T(k, bases, enzymedict[k])
+        newenz = T(k, bases2, enzymedict[k])
         #
         #   we add the enzymes to the corresponding batch.
         #
@@ -2702,4 +2637,4 @@ __all__ = (
     "CommOnly",
     "NonComm",
 ) + tuple(names)
-del k, enzymes, TYPE, bases, names
+del k, enzymes, TYPE, bases, bases2, names

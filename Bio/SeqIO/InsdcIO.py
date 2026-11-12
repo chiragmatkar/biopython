@@ -30,17 +30,27 @@ http://www.ebi.ac.uk/imgt/hla/docs/manual.html
 
 """
 
-
 import warnings
+from datetime import date as datetime_date
 from datetime import datetime
+from string import ascii_letters
+from string import digits
+
 from Bio import BiopythonWarning
-
-from Bio.Seq import UnknownSeq
-from Bio.GenBank.Scanner import GenBankScanner, EmblScanner, _ImgtScanner
-from Bio import SeqIO
 from Bio import SeqFeature
-from .Interfaces import SequenceIterator, SequenceWriter
+from Bio import SeqIO
+from Bio.GenBank.Scanner import _ImgtScanner
+from Bio.GenBank.Scanner import EmblScanner
+from Bio.GenBank.Scanner import GenBankScanner
+from Bio.Seq import UndefinedSequenceError
 
+from .Interfaces import _get_seq_string
+from .Interfaces import SequenceIterator
+from .Interfaces import SequenceWriter
+
+# Set containing all characters allowed in feature qualifier keys. See
+# https://www.insdc.org/submitting-standards/feature-table/#3.1
+_allowed_table_component_name_chars = set(ascii_letters + digits + "_-'*")
 
 # NOTE
 # ====
@@ -52,6 +62,8 @@ from .Interfaces import SequenceIterator, SequenceWriter
 
 class GenBankIterator(SequenceIterator):
     """Parser for GenBank files."""
+
+    modes = "t"
 
     def __init__(self, source):
         """Break up a Genbank file into SeqRecord objects.
@@ -90,16 +102,18 @@ class GenBankIterator(SequenceIterator):
         AF297471.1
 
         """
-        super().__init__(source, mode="t", fmt="GenBank")
+        super().__init__(source, fmt="GenBank")
+        self.records = GenBankScanner(debug=0).parse_records(self.stream)
 
-    def parse(self, handle):
-        """Start parsing the file, and return a SeqRecord generator."""
-        records = GenBankScanner(debug=0).parse_records(handle)
-        return records
+    def __next__(self):
+        """Return the next SeqRecord."""
+        return next(self.records)
 
 
 class EmblIterator(SequenceIterator):
     """Parser for EMBL files."""
+
+    modes = "t"
 
     def __init__(self, source):
         """Break up an EMBL file into SeqRecord objects.
@@ -144,16 +158,18 @@ class EmblIterator(SequenceIterator):
         CQ797900.1
 
         """
-        super().__init__(source, mode="t", fmt="EMBL")
+        super().__init__(source, fmt="EMBL")
+        self.records = EmblScanner(debug=0).parse_records(self.stream)
 
-    def parse(self, handle):
-        """Start parsing the file, and return a SeqRecord generator."""
-        records = EmblScanner(debug=0).parse_records(handle)
-        return records
+    def __next__(self):
+        """Return the next SeqRecord."""
+        return next(self.records)
 
 
 class ImgtIterator(SequenceIterator):
     """Parser for IMGT files."""
+
+    modes = "t"
 
     def __init__(self, source):
         """Break up an IMGT file into SeqRecord objects.
@@ -165,16 +181,18 @@ class ImgtIterator(SequenceIterator):
         Note that for genomes or chromosomes, there is typically only
         one record.
         """
-        super().__init__(source, mode="t", fmt="IMGT")
+        super().__init__(source, fmt="IMGT")
+        self.records = _ImgtScanner(debug=0).parse_records(self.stream)
 
-    def parse(self, handle):
-        """Start parsing the file, and return a SeqRecord generator."""
-        records = _ImgtScanner(debug=0).parse_records(handle)
-        return records
+    def __next__(self):
+        """Return the next SeqRecord."""
+        return next(self.records)
 
 
 class GenBankCdsFeatureIterator(SequenceIterator):
     """Parser for GenBank files, creating a SeqRecord for each CDS feature."""
+
+    modes = "t"
 
     def __init__(self, source):
         """Break up a Genbank file into SeqRecord objects for each CDS feature.
@@ -185,15 +203,18 @@ class GenBankCdsFeatureIterator(SequenceIterator):
         many CDS features.  These are returned as with the stated amino acid
         translation sequence (if given).
         """
-        super().__init__(source, mode="t", fmt="GenBank")
+        super().__init__(source, fmt="GenBank")
+        self.records = GenBankScanner(debug=0).parse_cds_features(self.stream)
 
-    def parse(self, handle):
-        """Start parsing the file, and return a SeqRecord generator."""
-        return GenBankScanner(debug=0).parse_cds_features(handle)
+    def __next__(self):
+        """Return the next SeqRecord."""
+        return next(self.records)
 
 
 class EmblCdsFeatureIterator(SequenceIterator):
     """Parser for EMBL files, creating a SeqRecord for each CDS feature."""
+
+    modes = "t"
 
     def __init__(self, source):
         """Break up a EMBL file into SeqRecord objects for each CDS feature.
@@ -204,11 +225,12 @@ class EmblCdsFeatureIterator(SequenceIterator):
         many CDS features.  These are returned as with the stated amino acid
         translation sequence (if given).
         """
-        super().__init__(source, mode="t", fmt="EMBL")
+        super().__init__(source, fmt="EMBL")
+        self.records = EmblScanner(debug=0).parse_cds_features(self.stream)
 
-    def parse(self, handle):
-        """Start parsing the file, and return a SeqRecord generator."""
-        return EmblScanner(debug=0).parse_cds_features(handle)
+    def __next__(self):
+        """Return the next SeqRecord."""
+        return next(self.records)
 
 
 def _insdc_feature_position_string(pos, offset=0):
@@ -217,26 +239,28 @@ def _insdc_feature_position_string(pos, offset=0):
     Use offset=1 to add one to convert a start position from python counting.
     """
     if isinstance(pos, SeqFeature.ExactPosition):
-        return "%i" % (pos.position + offset)
+        return "%i" % (pos + offset)
     elif isinstance(pos, SeqFeature.WithinPosition):
+        # TODO - avoid private variables
         return "(%i.%i)" % (
-            pos.position + offset,
-            pos.position + pos.extension + offset,
+            pos._left + offset,
+            pos._right + offset,
         )
     elif isinstance(pos, SeqFeature.BetweenPosition):
+        # TODO - avoid private variables
         return "(%i^%i)" % (
-            pos.position + offset,
-            pos.position + pos.extension + offset,
+            pos._left + offset,
+            pos._right + offset,
         )
     elif isinstance(pos, SeqFeature.BeforePosition):
-        return "<%i" % (pos.position + offset)
+        return "<%i" % (pos + offset)
     elif isinstance(pos, SeqFeature.AfterPosition):
-        return ">%i" % (pos.position + offset)
+        return ">%i" % (pos + offset)
     elif isinstance(pos, SeqFeature.OneOfPosition):
         return "one-of(%s)" % ",".join(
             _insdc_feature_position_string(p, offset) for p in pos.position_choices
         )
-    elif isinstance(pos, SeqFeature.AbstractPosition):
+    elif isinstance(pos, SeqFeature.Position):
         raise NotImplementedError("Please report this as a bug in Biopython.")
     else:
         raise ValueError("Expected a SeqFeature position object.")
@@ -244,32 +268,32 @@ def _insdc_feature_position_string(pos, offset=0):
 
 def _insdc_location_string_ignoring_strand_and_subfeatures(location, rec_length):
     if location.ref:
-        ref = "%s:" % location.ref
+        ref = f"{location.ref}:"
     else:
         ref = ""
     assert not location.ref_db
     if (
         isinstance(location.start, SeqFeature.ExactPosition)
         and isinstance(location.end, SeqFeature.ExactPosition)
-        and location.start.position == location.end.position
+        and location.start == location.end
     ):
         # Special case, for 12:12 return 12^13
         # (a zero length slice, meaning the point between two letters)
-        if location.end.position == rec_length:
+        if location.end == rec_length:
             # Very special case, for a between position at the end of a
             # sequence (used on some circular genomes, Bug 3098) we have
             # N:N so return N^1
             return "%s%i^1" % (ref, rec_length)
         else:
-            return "%s%i^%i" % (ref, location.end.position, location.end.position + 1)
+            return "%s%i^%i" % (ref, location.end, location.end + 1)
     if (
         isinstance(location.start, SeqFeature.ExactPosition)
         and isinstance(location.end, SeqFeature.ExactPosition)
-        and location.start.position + 1 == location.end.position
+        and location.start + 1 == location.end
     ):
         # Special case, for 11:12 return 12 rather than 12..12
         # (a length one slice, meaning a single letter)
-        return "%s%i" % (ref, location.end.position)
+        return "%s%i" % (ref, location.end)
     elif isinstance(location.start, SeqFeature.UnknownPosition) or isinstance(
         location.end, SeqFeature.UnknownPosition
     ):
@@ -284,7 +308,7 @@ def _insdc_location_string_ignoring_strand_and_subfeatures(location, rec_length)
             # Treat the unknown start position as a BeforePosition
             return "%s<%i..%s" % (
                 ref,
-                location.nofuzzy_end,
+                location.end,
                 _insdc_feature_position_string(location.end),
             )
         else:
@@ -292,7 +316,7 @@ def _insdc_location_string_ignoring_strand_and_subfeatures(location, rec_length)
             return "%s%s..>%i" % (
                 ref,
                 _insdc_feature_position_string(location.start, +1),
-                location.nofuzzy_start + 1,
+                location.start + 1,
             )
     else:
         # Typical case, e.g. 12..15 gets mapped to 11:15
@@ -305,19 +329,19 @@ def _insdc_location_string_ignoring_strand_and_subfeatures(location, rec_length)
 
 
 def _insdc_location_string(location, rec_length):
-    """Build a GenBank/EMBL location from a (Compound) FeatureLocation (PRIVATE).
+    """Build a GenBank/EMBL location from a (Compound) SimpleLocation (PRIVATE).
 
     There is a choice of how to show joins on the reverse complement strand,
     GenBank used "complement(join(1,10),(20,100))" while EMBL used to use
     "join(complement(20,100),complement(1,10))" instead (but appears to have
     now adopted the GenBank convention). Notice that the order of the entries
     is reversed! This function therefore uses the first form. In this situation
-    we expect the CompoundFeatureLocation and its parts to all be marked as
+    we expect the CompoundLocation and its parts to all be marked as
     strand == -1, and to be in the order 19:100 then 0:10.
     """
     try:
         parts = location.parts
-        # CompoundFeatureLocation
+        # CompoundLocation
         if location.strand == -1:
             # Special case, put complement outside the join/order/... and reverse order
             return "complement(%s(%s))" % (
@@ -335,12 +359,12 @@ def _insdc_location_string(location, rec_length):
                 ",".join(_insdc_location_string(p, rec_length) for p in parts),
             )
     except AttributeError:
-        # Simple FeatureLocation
+        # SimpleLocation
         loc = _insdc_location_string_ignoring_strand_and_subfeatures(
             location, rec_length
         )
         if location.strand == -1:
-            return "complement(%s)" % loc
+            return f"complement({loc})"
         else:
             return loc
 
@@ -368,13 +392,28 @@ class _InsdcWriter(SequenceWriter):
         "transl_table",
     )
 
+    modes = "t"
+
     def _write_feature_qualifier(self, key, value=None, quote=None):
+        if not _allowed_table_component_name_chars.issuperset(key):
+            warnings.warn(
+                f"Feature qualifier key '{key}' contains characters not"
+                " allowed by standard.",
+                BiopythonWarning,
+            )
+        if len(key) > 20:
+            warnings.warn(
+                f"Feature qualifier key '{key}' is longer than maximum length"
+                " specified by standard (20 characters).",
+                BiopythonWarning,
+            )
+
         if value is None:
             # Value-less entry like /pseudo
-            self.handle.write("%s/%s\n" % (self.QUALIFIER_INDENT_STR, key))
+            self.handle.write(f"{self.QUALIFIER_INDENT_STR}/{key}\n")
             return
 
-        if type(value) == str:
+        if isinstance(value, str):
             value = value.replace(
                 '"', '""'
             )  # NCBI says escape " as "" in qualifier values
@@ -388,9 +427,9 @@ class _InsdcWriter(SequenceWriter):
             else:
                 quote = True
         if quote:
-            line = '%s/%s="%s"' % (self.QUALIFIER_INDENT_STR, key, value)
+            line = f'{self.QUALIFIER_INDENT_STR}/{key}="{value}"'
         else:
-            line = "%s/%s=%s" % (self.QUALIFIER_INDENT_STR, key, value)
+            line = f"{self.QUALIFIER_INDENT_STR}/{key}={value}"
         if len(line) <= self.MAX_WIDTH:
             self.handle.write(line + "\n")
             return
@@ -420,7 +459,7 @@ class _InsdcWriter(SequenceWriter):
         index = location[:length].rfind(",")
         if index == -1:
             # No good place to split (!)
-            warnings.warn("Couldn't split location:\n%s" % location, BiopythonWarning)
+            warnings.warn(f"Couldn't split location:\n{location}", BiopythonWarning)
             return location
         return (
             location[: index + 1]
@@ -432,8 +471,21 @@ class _InsdcWriter(SequenceWriter):
     def _write_feature(self, feature, record_length):
         """Write a single SeqFeature object to features table (PRIVATE)."""
         assert feature.type, feature
-        location = _insdc_location_string(feature.location, record_length)
+
         f_type = feature.type.replace(" ", "_")
+        if not _allowed_table_component_name_chars.issuperset(f_type):
+            warnings.warn(
+                f"Feature key '{f_type}' contains characters not allowed by standard.",
+                BiopythonWarning,
+            )
+        if len(f_type) > 15:
+            warnings.warn(
+                f"Feature key '{f_type}' is longer than maximum length"
+                " specified by standard (15 characters).",
+                BiopythonWarning,
+            )
+
+        location = _insdc_location_string(feature.location, record_length)
         line = (
             (self.QUALIFIER_INDENT_TMP % f_type)[: self.QUALIFIER_INDENT]
             + self._wrap_location(location)
@@ -541,11 +593,11 @@ class GenBankWriter(_InsdcWriter):
         if len(text) > self.MAX_WIDTH - self.HEADER_WIDTH:
             if tag:
                 warnings.warn(
-                    "Annotation %r too long for %r line" % (text, tag), BiopythonWarning
+                    f"Annotation {text!r} too long for {tag!r} line", BiopythonWarning
                 )
             else:
                 # Can't give such a precise warning
-                warnings.warn("Annotation %r too long" % text, BiopythonWarning)
+                warnings.warn(f"Annotation {text!r} too long", BiopythonWarning)
         self.handle.write(
             "%s%s\n" % (tag.ljust(self.HEADER_WIDTH), text.replace("\n", " "))
         )
@@ -581,9 +633,6 @@ class GenBankWriter(_InsdcWriter):
         # Cope with a list of one string:
         if isinstance(date, list) and len(date) == 1:
             date = date[0]
-        if isinstance(date, datetime):
-            date = date.strftime("%d-%b-%Y").upper()
-
         months = [
             "JAN",
             "FEB",
@@ -598,11 +647,21 @@ class GenBankWriter(_InsdcWriter):
             "NOV",
             "DEC",
         ]
+        if isinstance(date, datetime_date):
+            date = f"{date.day:02d}-{months[date.month - 1]}-{date.year}"
         if not isinstance(date, str) or len(date) != 11:
+            warnings.warn(
+                f"Invalid date format provided {record.annotations['date']!r}, using default {default!r}",
+                BiopythonWarning,
+            )
             return default
         try:
             datetime(int(date[-4:]), months.index(date[3:6]) + 1, int(date[0:2]))
         except ValueError:
+            warnings.warn(
+                f"Invalid date provided {record.annotations['date']!r}, using default {default!r}",
+                BiopythonWarning,
+            )
             date = default
         return date
 
@@ -726,7 +785,7 @@ class GenBankWriter(_InsdcWriter):
                 )
 
         if len(locus.split()) > 1:
-            raise ValueError("Invalid whitespace in %r for LOCUS line" % locus)
+            raise ValueError(f"Invalid whitespace in {locus!r} for LOCUS line")
         if len(record) > 99999999999:
             # As of the GenBank release notes 229.0, the locus line can be
             # any length. However, long locus lines may not be compatible
@@ -746,7 +805,7 @@ class GenBankWriter(_InsdcWriter):
             # Deal with common cases from EMBL to GenBank
             mol_type = mol_type.replace("unassigned ", "").replace("genomic ", "")
             if len(mol_type) > 7:
-                warnings.warn("Molecule type %r too long" % mol_type, BiopythonWarning)
+                warnings.warn(f"Molecule type {mol_type!r} too long", BiopythonWarning)
                 mol_type = "DNA"
         if mol_type in ["protein", "PROTEIN"]:
             mol_type = ""
@@ -791,7 +850,7 @@ class GenBankWriter(_InsdcWriter):
                 )
 
             if not (
-                splitline[4].strip() == ""
+                splitline[3].strip() == "aa"
                 or "DNA" in splitline[4].strip().upper()
                 or "RNA" in splitline[4].strip().upper()
             ):
@@ -879,8 +938,8 @@ class GenBankWriter(_InsdcWriter):
                     units = "bases"
                 data += "  (%s %i to %i)" % (
                     units,
-                    ref.location[0].nofuzzy_start + 1,
-                    ref.location[0].nofuzzy_end,
+                    ref.location[0].start + 1,
+                    ref.location[0].end,
                 )
             self._write_single_line("REFERENCE", data)
             if ref.authors:
@@ -921,7 +980,7 @@ class GenBankWriter(_InsdcWriter):
             padding = 0
             for key, data in comment.items():
                 for subkey, subdata in data.items():
-                    padding = len(subkey) if len(subkey) > padding else padding
+                    padding = max(padding, len(subkey))
             # Construct output
             for key, data in comment.items():
                 lines.append(f"##{key}{self.STRUCTURED_COMMENT_START}")
@@ -954,7 +1013,9 @@ class GenBankWriter(_InsdcWriter):
         # Loosely based on code from Howard Salis
         # TODO - Force lower case?
 
-        if isinstance(record.seq, UnknownSeq):
+        try:
+            data = _get_seq_string(record)
+        except UndefinedSequenceError:
             # We have already recorded the length, and there is no need
             # to record a long sequence of NNNNNNN...NNN or whatever.
             if "contig" in record.annotations:
@@ -964,7 +1025,7 @@ class GenBankWriter(_InsdcWriter):
             return
 
         # Catches sequence being None:
-        data = self._get_seq_string(record).lower()
+        data = data.lower()
         seq_len = len(data)
         self.handle.write("ORIGIN\n")
         for line_number in range(0, seq_len, self.LETTERS_PER_LINE):
@@ -972,7 +1033,7 @@ class GenBankWriter(_InsdcWriter):
             for words in range(
                 line_number, min(line_number + self.LETTERS_PER_LINE, seq_len), 10
             ):
-                self.handle.write(" %s" % data[words : words + 10])
+                self.handle.write(f" {data[words : words + 10]}")
             self.handle.write("\n")
 
     def write_record(self, record):
@@ -1012,9 +1073,9 @@ class GenBankWriter(_InsdcWriter):
 
         self._write_single_line("ACCESSION", accession)
         if gi != ".":
-            self._write_single_line("VERSION", "%s  GI:%s" % (acc_with_version, gi))
+            self._write_single_line("VERSION", f"{acc_with_version}  GI:{gi}")
         else:
-            self._write_single_line("VERSION", "%s" % acc_with_version)
+            self._write_single_line("VERSION", acc_with_version)
 
         # The NCBI initially expected two types of link,
         # e.g. "Project:28471" and "Trace Assembly Archive:123456"
@@ -1085,6 +1146,13 @@ class GenBankWriter(_InsdcWriter):
             taxonomy = "."
         self._write_multi_line("", taxonomy)
 
+        if "db_source" in record.annotations:
+            # Hack around the issue of BioSQL loading a list for the db_source
+            db_source = record.annotations["db_source"]
+            if isinstance(db_source, list):
+                db_source = db_source[0]
+            self._write_single_line("DBSOURCE", db_source)
+
         if "references" in record.annotations:
             self._write_references(record)
 
@@ -1126,7 +1194,9 @@ class EmblWriter(_InsdcWriter):
     def _write_sequence(self, record):
         handle = self.handle  # save looking up this multiple times
 
-        if isinstance(record.seq, UnknownSeq):
+        try:
+            data = _get_seq_string(record)
+        except UndefinedSequenceError:
             # We have already recorded the length, and there is no need
             # to record a long sequence of NNNNNNN...NNN or whatever.
             if "contig" in record.annotations:
@@ -1137,7 +1207,7 @@ class EmblWriter(_InsdcWriter):
             return
 
         # Catches sequence being None
-        data = self._get_seq_string(record).lower()
+        data = data.lower()
         seq_len = len(data)
 
         molecule_type = record.annotations.get("molecule_type")
@@ -1155,13 +1225,13 @@ class EmblWriter(_InsdcWriter):
         else:
             handle.write("SQ   \n")
 
-        for line_number in range(0, seq_len // self.LETTERS_PER_LINE):
+        for line_number in range(seq_len // self.LETTERS_PER_LINE):
             handle.write("    ")  # Just four, not five
             for block in range(self.BLOCKS_PER_LINE):
                 index = (
                     self.LETTERS_PER_LINE * line_number + self.LETTERS_PER_BLOCK * block
                 )
-                handle.write(" %s" % data[index : index + self.LETTERS_PER_BLOCK])
+                handle.write(f" {data[index : index + self.LETTERS_PER_BLOCK]}")
             handle.write(
                 str((line_number + 1) * self.LETTERS_PER_LINE).rjust(
                     self.POSITION_PADDING
@@ -1177,7 +1247,7 @@ class EmblWriter(_InsdcWriter):
                     self.LETTERS_PER_LINE * line_number + self.LETTERS_PER_BLOCK * block
                 )
                 handle.write(
-                    (" %s" % data[index : index + self.LETTERS_PER_BLOCK]).ljust(11)
+                    f" {data[index : index + self.LETTERS_PER_BLOCK]}".ljust(11)
                 )
             handle.write(str(seq_len).rjust(self.POSITION_PADDING))
             handle.write("\n")
@@ -1186,7 +1256,7 @@ class EmblWriter(_InsdcWriter):
         assert len(tag) == 2
         line = tag + "   " + text
         if len(text) > self.MAX_WIDTH:
-            warnings.warn("Line %r too long" % line, BiopythonWarning)
+            warnings.warn(f"Line {line!r} too long", BiopythonWarning)
         self.handle.write(line + "\n")
 
     def _write_multi_line(self, tag, text):
@@ -1209,12 +1279,10 @@ class EmblWriter(_InsdcWriter):
             )
 
         if ";" in accession:
-            raise ValueError(
-                "Cannot have semi-colon in EMBL accession, '%s'" % accession
-            )
+            raise ValueError(f"Cannot have semi-colon in EMBL accession, '{accession}'")
         if " " in accession:
             # This is out of practicality... might it be allowed?
-            raise ValueError("Cannot have spaces in EMBL accession, '%s'" % accession)
+            raise ValueError(f"Cannot have spaces in EMBL accession, '{accession}'")
 
         topology = self._get_annotation_str(record, "topology", default="")
 
@@ -1224,15 +1292,25 @@ class EmblWriter(_InsdcWriter):
         mol_type = record.annotations.get("molecule_type")
         if mol_type is None:
             raise ValueError("missing molecule_type in annotations")
-        elif "DNA" in mol_type:
+        if mol_type not in (
+            "DNA",
+            "genomic DNA",
+            "unassigned DNA",
+            "mRNA",
+            "RNA",
+            "protein",
+        ):
+            warnings.warn(f"Non-standard molecule type: {mol_type}", BiopythonWarning)
+        mol_type_upper = mol_type.upper()
+        if "DNA" in mol_type_upper:
             units = "BP"
-        elif "RNA" in mol_type:
+        elif "RNA" in mol_type_upper:
             units = "BP"
-        elif "PROTEIN" in mol_type.upper():
+        elif "PROTEIN" in mol_type_upper:
             mol_type = "PROTEIN"
             units = "AA"
         else:
-            raise ValueError("failed to understand molecule_type '%s'" % mol_type)
+            raise ValueError(f"failed to understand molecule_type '{mol_type}'")
 
         # Get the taxonomy division
         division = self._get_data_division(record)
@@ -1337,20 +1415,19 @@ class EmblWriter(_InsdcWriter):
             if ref.location and len(ref.location) == 1:
                 self._write_single_line(
                     "RP",
-                    "%i-%i"
-                    % (ref.location[0].nofuzzy_start + 1, ref.location[0].nofuzzy_end),
+                    "%i-%i" % (ref.location[0].start + 1, ref.location[0].end),
                 )
             # TODO - record any DOI or AGRICOLA identifier in the reference object?
             if ref.pubmed_id:
-                self._write_single_line("RX", "PUBMED; %s." % ref.pubmed_id)
+                self._write_single_line("RX", f"PUBMED; {ref.pubmed_id}.")
             if ref.consrtm:
-                self._write_single_line("RG", "%s" % ref.consrtm)
+                self._write_single_line("RG", f"{ref.consrtm}")
             if ref.authors:
                 # We store the AUTHORS data as a single string
                 self._write_multi_line("RA", ref.authors + ";")
             if ref.title:
                 # We store the title as a single string
-                self._write_multi_line("RT", '"%s";' % ref.title)
+                self._write_multi_line("RT", f'"{ref.title}";')
             if ref.journal:
                 # We store this as a single string - holds the journal name,
                 # volume, year, and page numbers of the citation

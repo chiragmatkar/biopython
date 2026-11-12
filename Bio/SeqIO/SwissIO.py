@@ -15,67 +15,47 @@ the sequences as SeqRecord objects.
 See also Bio.SeqIO.UniprotIO.py which supports the "uniprot-xml" format.
 """
 
-
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
 from Bio import SeqFeature
 from Bio import SwissProt
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+
+from .Interfaces import _TextIOSource
+from .Interfaces import SequenceIterator
 
 
-def _make_position(location_string, offset=0):
-    """Turn a Swiss location position into a SeqFeature position object (PRIVATE).
+class SwissIterator(SequenceIterator):
+    """Parser to break up a Swiss-Prot/UniProt file into SeqRecord objects."""
 
-    An offset of -1 is used with a start location to make it pythonic.
-    """
-    if location_string == "?":
-        return SeqFeature.UnknownPosition()
-    # Hack so that feature from 0 to 0 becomes 0 to 0, not -1 to 0.
-    try:
-        return SeqFeature.ExactPosition(max(0, offset + int(location_string)))
-    except ValueError:
-        pass
-    if location_string.startswith("<"):
-        try:
-            return SeqFeature.BeforePosition(max(0, offset + int(location_string[1:])))
-        except ValueError:
-            pass
-    elif location_string.startswith(">"):  # e.g. ">13"
-        try:
-            return SeqFeature.AfterPosition(max(0, offset + int(location_string[1:])))
-        except ValueError:
-            pass
-    elif location_string.startswith("?"):  # e.g. "?22"
-        try:
-            return SeqFeature.UncertainPosition(
-                max(0, offset + int(location_string[1:]))
-            )
-        except ValueError:
-            pass
-    raise NotImplementedError("Cannot parse location '%s'" % location_string)
+    modes = "t"
 
+    def __init__(self, source: _TextIOSource) -> None:
+        """Iterate over a Swiss-Prot file and return SeqRecord objects.
 
-def SwissIterator(source):
-    """Break up a Swiss-Prot/UniProt file into SeqRecord objects.
+        Arguments:
+         - source - input stream opened in text mode, or a path to a file
 
-    Argument source is a file-like object or a path to a file.
+        Every section from the ID line to the terminating // becomes
+        a single SeqRecord with associated annotation and features.
 
-    Every section from the ID line to the terminating // becomes
-    a single SeqRecord with associated annotation and features.
+        This parser is for the flat file "swiss" format as used by:
+         - Swiss-Prot aka SwissProt
+         - TrEMBL
+         - UniProtKB aka UniProt Knowledgebase
 
-    This parser is for the flat file "swiss" format as used by:
-     - Swiss-Prot aka SwissProt
-     - TrEMBL
-     - UniProtKB aka UniProt Knowledgebase
+        For consistency with BioPerl and EMBOSS we call this the "swiss"
+        format. See also the SeqIO support for "uniprot-xml" format.
 
-    For consistency with BioPerl and EMBOSS we call this the "swiss"
-    format. See also the SeqIO support for "uniprot-xml" format.
+        Rather than calling it directly, you are expected to use this
+        parser via Bio.SeqIO.parse(..., format="swiss") instead.
+        """
+        super().__init__(source, fmt="SwissProt")
 
-    Rather than calling it directly, you are expected to use this
-    parser via Bio.SeqIO.parse(..., format="swiss") instead.
-    """
-    swiss_records = SwissProt.parse(source)
-
-    for swiss_record in swiss_records:
+    def __next__(self):
+        """Return the next SeqRecord from the Swiss-Prot/UniProt stream."""
+        swiss_record = SwissProt._read(self.stream)
+        if swiss_record is None:
+            raise StopIteration
         # Convert the SwissProt record to a SeqRecord
         record = SeqRecord(
             Seq(swiss_record.sequence),
@@ -88,7 +68,7 @@ def SwissIterator(source):
             if len(cross_reference) < 2:
                 continue
             database, accession = cross_reference[:2]
-            dbxref = "%s:%s" % (database, accession)
+            dbxref = f"{database}:{accession}"
             if dbxref not in record.dbxrefs:
                 record.dbxrefs.append(dbxref)
         annotations = record.annotations
@@ -134,11 +114,11 @@ def SwissIterator(source):
                     elif key == "AGRICOLA":
                         pass
                     else:
-                        raise ValueError("Unknown key %s found in references" % key)
+                        raise ValueError(f"Unknown key {key} found in references")
                 feature.authors = reference.authors
                 feature.title = reference.title
                 feature.journal = reference.location
                 annotations["references"].append(feature)
         if swiss_record.keywords:
             record.annotations["keywords"] = swiss_record.keywords
-        yield record
+        return record

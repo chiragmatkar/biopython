@@ -8,12 +8,12 @@
 import os
 import unittest
 
+from search_tests_common import SearchTestBaseClass
+
 from Bio import SearchIO
 
-from search_tests_common import compare_search_obj
 
-
-class WriteCases(unittest.TestCase):
+class WriteCases(SearchTestBaseClass):
     def tearDown(self):
         if os.path.exists(self.out):
             os.remove(self.out)
@@ -26,7 +26,7 @@ class WriteCases(unittest.TestCase):
         SearchIO.write(source_qresults, out_file, out_format, **kwargs)
         out_qresults = list(SearchIO.parse(out_file, out_format, **kwargs))
         for source, out in zip(source_qresults, out_qresults):
-            self.assertTrue(compare_search_obj(source, out))
+            self.compare_search_obj(source, out)
 
     def read_write_and_compare(
         self, source_file, source_format, out_file, out_format, **kwargs
@@ -35,11 +35,10 @@ class WriteCases(unittest.TestCase):
         source_qresult = SearchIO.read(source_file, source_format, **kwargs)
         SearchIO.write(source_qresult, out_file, out_format, **kwargs)
         out_qresult = SearchIO.read(out_file, out_format, **kwargs)
-        self.assertTrue(compare_search_obj(source_qresult, out_qresult))
+        self.compare_search_obj(source_qresult, out_qresult)
 
 
 class BlastXmlWriteCases(WriteCases):
-
     fmt = "blast-xml"
     out = os.path.join("Blast", "test_write.xml")
 
@@ -56,7 +55,6 @@ class BlastXmlWriteCases(WriteCases):
 
 
 class BlastTabWriteCases(WriteCases):
-
     fmt = "blast-tab"
     out = os.path.join("Blast", "test_write.txt")
 
@@ -141,7 +139,6 @@ class BlastTabWriteCases(WriteCases):
 
 
 class HmmerTabWriteCases(WriteCases):
-
     fmt = "hmmer3-tab"
     out = os.path.join("Hmmer", "test_write.txt")
 
@@ -158,7 +155,6 @@ class HmmerTabWriteCases(WriteCases):
 
 
 class HmmerDomtabWriteCases(WriteCases):
-
     out = os.path.join("Hmmer", "test_write.txt")
 
     def test_write_single_from_hmmscandomtab(self):
@@ -183,7 +179,6 @@ class HmmerDomtabWriteCases(WriteCases):
 
 
 class BlatPslWriteCases(WriteCases):
-
     fmt = "blat-psl"
     out = os.path.join("Blat", "test_write.txt")
 

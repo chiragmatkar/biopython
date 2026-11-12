@@ -1,4 +1,4 @@
-# Copyright 2010-2016 by Peter Cock.
+# Copyright 2010-2016, 2024 by Peter Cock.
 # All rights reserved.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
@@ -8,10 +8,12 @@
 See also the doctests in bgzf.py which are called via run_tests.py
 """
 
-import unittest
 import gzip
+import io
 import os
+import random
 import tempfile
+import unittest
 from random import shuffle
 
 from Bio import bgzf
@@ -47,11 +49,28 @@ class BgzfTests(unittest.TestCase):
         self.assertEqual(data, new_data)
 
     def check_blocks(self, old_file, new_file):
+        """Verify newly created BGZF file has similar blocks to original.
+
+        We originally assumed it would have the same blocks, since zlib
+        behaviour has been near static for years. However, there is scope
+        for changes in default compression level or the zlib implementation
+        (e.g. zlib-ng) which breaks that assumption.
+
+        Therefore, from (start, raw_len, data_start, data_len) for each
+        block we only confirm that the data values match (and allow for
+        the compressed representation to vary).
+        """
         with open(old_file, "rb") as h:
-            old = list(bgzf.BgzfBlocks(h))
+            old = [
+                (data_start, data_len)
+                for (start, raw_len, data_start, data_len) in bgzf.BgzfBlocks(h)
+            ]
 
         with open(new_file, "rb") as h:
-            new = list(bgzf.BgzfBlocks(h))
+            new = [
+                (data_start, data_len)
+                for (start, raw_len, data_start, data_len) in bgzf.BgzfBlocks(h)
+            ]
 
         self.assertEqual(len(old), len(new))
         self.assertEqual(old, new)
@@ -109,7 +128,7 @@ class BgzfTests(unittest.TestCase):
 
                 self.assertEqual(len(old), len(new))
                 self.assertEqual(
-                    old[:10], new[:10], "%r vs %r, mode %r" % (old[:10], new[:10], mode)
+                    old[:10], new[:10], f"{old[:10]!r} vs {new[:10]!r}, mode {mode!r}"
                 )
                 self.assertEqual(old, new)
 
@@ -146,7 +165,7 @@ class BgzfTests(unittest.TestCase):
                 self.assertEqual(len(old), len(new))
                 # If bytes vs unicode mismatch, give a short error message:
                 self.assertEqual(
-                    old[:10], new[:10], "%r vs %r, mode %r" % (old[:10], new[:10], mode)
+                    old[:10], new[:10], f"{old[:10]!r} vs {new[:10]!r}, mode {mode!r}"
                 )
                 self.assertEqual(old, new)
 
@@ -368,7 +387,6 @@ class BgzfTests(unittest.TestCase):
             self.assertNotEqual(offset3, h.tell())
 
         with bgzf.open(temp_file, "r") as h:  # Text mode!
-
             h.seek(offset)  # i.e. End of first BGZF block
             self.assertEqual(offset1, h.tell())  # Note *not* seek offset
             # Now at start of second BGZF block
@@ -383,9 +401,71 @@ class BgzfTests(unittest.TestCase):
             self.assertEqual(offset1, h.tell())
             self.assertEqual(h.read(5), "Magic")
 
+    def test_write_random_data(self):
+        """Check writing incompressible data handles the BGZF block size limit."""
+        data = random.Random(0).randbytes(65536)
+        with bgzf.BgzfWriter(self.temp_file, "wb") as writer:
+            writer.write(data)
+
+        with gzip.open(self.temp_file, "rb") as reader:
+            self.assertEqual(reader.read(), data)
+
+        with open(self.temp_file, "rb") as handle:
+            blocks = list(bgzf.BgzfBlocks(handle))
+        self.assertEqual([block[3] for block in blocks], [32768, 32768, 0])
+
     def test_append_mode(self):
-        with self.assertRaises(NotImplementedError):
-            bgzf.open(self.temp_file, "ab")
+        with bgzf.open(self.temp_file, "wb") as h:
+            h.write(b">hello\n")
+            h.write(b"aaaaaaaaaaaaaaaaaa\n")
+            h.flush()
+            previous_offsets = bgzf.split_virtual_offset(h.tell())
+            # Just flushed, so new block
+            self.assertEqual(previous_offsets[1], 0)
+        with bgzf.open(self.temp_file, "ab") as h:
+            append_position = h.tell()
+            self.assertEqual(
+                (previous_offsets[0] + 28, 0),
+                bgzf.split_virtual_offset(append_position),
+            )
+            h.write(b">there\n")
+            self.assertEqual(
+                (previous_offsets[0] + 28, 7), bgzf.split_virtual_offset(h.tell())
+            )
+            h.write(b"cccccccccccccccccc\n")
+        with bgzf.open(self.temp_file, "rb") as h:
+            self.assertEqual(
+                list(h),
+                [
+                    b">hello\n",
+                    b"aaaaaaaaaaaaaaaaaa\n",
+                    b">there\n",
+                    b"cccccccccccccccccc\n",
+                ],
+            )
+            h.seek(append_position)
+            self.assertEqual(list(h), [b">there\n", b"cccccccccccccccccc\n"])
+
+    def test_double_flush(self):
+        with bgzf.open(self.temp_file, "wb") as h:
+            h.write(b">hello\n")
+            h.write(b"aaaaaaaaaaaaaaaaaa\n")
+            h.flush()
+            pos = h.tell()
+            h.flush()
+            self.assertGreater(h.tell(), pos)  # sanity check
+            h.write(b">there\n")
+            h.write(b"cccccccccccccccccc\n")
+        with bgzf.open(self.temp_file, "rb") as h:
+            self.assertEqual(
+                list(h),
+                [
+                    b">hello\n",
+                    b"aaaaaaaaaaaaaaaaaa\n",
+                    b">there\n",
+                    b"cccccccccccccccccc\n",
+                ],
+            )
 
     def test_many_blocks_in_single_read(self):
         n = 1000
@@ -415,6 +495,40 @@ class BgzfTests(unittest.TestCase):
             with bgzf.open("GenBank/cor6_6.gb.bgz", mode) as decompressed:
                 with self.assertRaises(TypeError):
                     list(bgzf.BgzfBlocks(decompressed))
+
+    def test_reader_with_binary_fileobj(self):
+        """A BgzfReader must accept a binary mode file object."""
+        reader = bgzf.BgzfReader(fileobj=io.BytesIO())
+        self.assertEqual(0, reader.tell())
+
+    def test_reader_with_non_binary_fileobj(self):
+        """A BgzfReader must raise ValueError on a non-binary file object."""
+        error = "^fileobj not opened in binary mode$"
+        with self.assertRaisesRegex(ValueError, error):
+            bgzf.BgzfReader(fileobj=io.StringIO())
+
+    def test_writer_with_binary_fileobj(self):
+        """A BgzfWriter must accept a binary mode file object."""
+        writer = bgzf.BgzfWriter(fileobj=io.BytesIO())
+        self.assertEqual(0, writer.tell())
+
+    def test_writer_with_non_binary_fileobj(self):
+        """A BgzfWriter must raise ValueError on a non-binary file object."""
+        error = "^fileobj not opened in binary mode$"
+        with self.assertRaisesRegex(ValueError, error):
+            bgzf.BgzfWriter(fileobj=io.StringIO())
+
+    def test_writer_with_non_binary_file(self):
+        """A BgzfWriter must raise ValueError on a non-binary file handle."""
+        error = "^fileobj not opened in binary mode$"
+        with open(self.temp_file, "w") as handle:
+            with self.assertRaisesRegex(ValueError, error):
+                bgzf.BgzfWriter(fileobj=handle)
+
+    def test_writer_passes_on_plain_file_handle(self):
+        """A BgzfWriter must be able to work with plain file handles."""
+        with open(self.temp_file, "wb") as handle:
+            bgzf.BgzfWriter(fileobj=handle)
 
 
 if __name__ == "__main__":

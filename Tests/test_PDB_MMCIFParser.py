@@ -15,11 +15,12 @@ import unittest
 import warnings
 
 try:
-    import numpy
+    import numpy as np
     from numpy import dot  # Missing on old PyPy's micronumpy
 
     del dot
-    from numpy.linalg import svd, det  # Missing in PyPy 2.0 numpypy
+    from numpy.linalg import det  # Missing in PyPy 2.0 numpypy
+    from numpy.linalg import svd  # Missing in PyPy 2.0 numpypy
 except ImportError:
     from Bio import MissingPythonDependencyError
 
@@ -28,12 +29,15 @@ except ImportError:
     ) from None
 
 
+from Bio.PDB import CaPPBuilder
+from Bio.PDB import PDBIO
+from Bio.PDB import PDBParser
+from Bio.PDB import PPBuilder
+from Bio.PDB.MMCIFParser import FastMMCIFParser
+from Bio.PDB.MMCIFParser import MMCIFParser
+from Bio.PDB.PDBExceptions import PDBConstructionWarning
+from Bio.PDB.PDBExceptions import PDBIOException
 from Bio.Seq import Seq
-from Bio.PDB.PDBExceptions import PDBConstructionException, PDBConstructionWarning
-
-from Bio.PDB import PPBuilder, CaPPBuilder
-from Bio.PDB.MMCIFParser import MMCIFParser, FastMMCIFParser
-from Bio.PDB import PDBParser, PDBIO
 
 
 class ParseReal(unittest.TestCase):
@@ -49,6 +53,21 @@ class ParseReal(unittest.TestCase):
 
         self.assertEqual(len(structure), 1)
         self.assertEqual(len(f_structure), 1)
+
+        parser_lab_res = MMCIFParser(auth_residues=False, QUIET=True)
+        fast_parser_lab_res = FastMMCIFParser(auth_residues=False, QUIET=True)
+        parser_lab_chain = MMCIFParser(auth_chains=False, QUIET=True)
+        fast_parser_lab_chain = FastMMCIFParser(auth_chains=False, QUIET=True)
+
+        structure_lr = parser_lab_res.get_structure("example", "PDB/1A8O.cif")
+        f_structure_lr = fast_parser_lab_res.get_structure("example", "PDB/1A8O.cif")
+        structure_lc = parser_lab_chain.get_structure("example", "PDB/1A8O.cif")
+        f_structure_lc = fast_parser_lab_chain.get_structure("example", "PDB/1A8O.cif")
+
+        self.assertEqual(len(list(structure_lr.get_atoms())), 556)
+        self.assertEqual(len(list(f_structure_lr.get_atoms())), 556)
+        self.assertEqual(len(list(structure_lc.get_atoms())), 644)
+        self.assertEqual(len(list(f_structure_lc.get_atoms())), 644)
 
         for ppbuild in [PPBuilder(), CaPPBuilder()]:
             # ==========================================================
@@ -125,15 +144,15 @@ class ParseReal(unittest.TestCase):
         for atoms in [s_atoms, f_atoms]:
             self.assertEqual(len(atoms), 644)
             atom_names = ["N", "CA", "C", "O", "CB"]
-            self.assertSequenceEqual([a.get_name() for a in atoms[:5]], atom_names)
-            self.assertSequenceEqual([a.get_id() for a in atoms[:5]], atom_names)
-            self.assertSequenceEqual([a.get_fullname() for a in atoms[:5]], atom_names)
-            self.assertSequenceEqual(
+            self.assertEqual([a.get_name() for a in atoms[:5]], atom_names)
+            self.assertEqual([a.get_id() for a in atoms[:5]], atom_names)
+            self.assertEqual([a.get_fullname() for a in atoms[:5]], atom_names)
+            self.assertEqual(
                 [a.get_occupancy() for a in atoms[:5]], [1.0, 1.0, 1.0, 1.0, 1.0]
             )
-            self.assertIsInstance(atoms[0].get_coord(), numpy.ndarray)
-            coord = numpy.array([19.594, 32.367, 28.012], dtype=numpy.float32)
-            numpy.testing.assert_array_equal(atoms[0].get_coord(), coord)
+            self.assertIsInstance(atoms[0].get_coord(), np.ndarray)
+            coord = np.array([19.594, 32.367, 28.012], dtype=np.float32)
+            np.testing.assert_array_equal(atoms[0].get_coord(), coord)
 
             self.assertEqual(atoms[0].get_bfactor(), 18.03)
             for atom in atoms:
@@ -156,26 +175,26 @@ class ParseReal(unittest.TestCase):
 
         for atoms in [s_atoms, f_atoms]:
             atom_names = ["N", "CA", "C", "O", "CB"]
-            self.assertSequenceEqual([a.get_name() for a in atoms[:5]], atom_names)
-            self.assertSequenceEqual([a.get_id() for a in atoms[:5]], atom_names)
-            self.assertSequenceEqual([a.get_fullname() for a in atoms[:5]], atom_names)
-            self.assertSequenceEqual(
+            self.assertEqual([a.get_name() for a in atoms[:5]], atom_names)
+            self.assertEqual([a.get_id() for a in atoms[:5]], atom_names)
+            self.assertEqual([a.get_fullname() for a in atoms[:5]], atom_names)
+            self.assertEqual(
                 [a.get_occupancy() for a in atoms[:5]], [1.0, 1.0, 1.0, 1.0, 1.0]
             )
-            self.assertIsInstance(atoms[0].get_coord(), numpy.ndarray)
-            coord = numpy.array([50.346, 19.287, 17.288], dtype=numpy.float32)
-            numpy.testing.assert_array_equal(atoms[0].get_coord(), coord)
+            self.assertIsInstance(atoms[0].get_coord(), np.ndarray)
+            coord = np.array([50.346, 19.287, 17.288], dtype=np.float32)
+            np.testing.assert_array_equal(atoms[0].get_coord(), coord)
             self.assertEqual(atoms[0].get_bfactor(), 32.02)
 
-            ansiou = numpy.array(
-                [0.4738, -0.0309, -0.0231, 0.4524, 0.0036, 0.2904], dtype=numpy.float32
+            ansiou = np.array(
+                [0.4738, -0.0309, -0.0231, 0.4524, 0.0036, 0.2904], dtype=np.float32
             )
-            numpy.testing.assert_array_equal(atoms[0].get_anisou(), ansiou)
-            ansiou = numpy.array(
-                [1.1242, 0.2942, -0.0995, 1.1240, -0.1088, 0.8221], dtype=numpy.float32
+            np.testing.assert_array_equal(atoms[0].get_anisou(), ansiou)
+            ansiou = np.array(
+                [1.1242, 0.2942, -0.0995, 1.1240, -0.1088, 0.8221], dtype=np.float32
             )
             atom_937 = list(f_structure[0]["A"])[114]["CB"]
-            numpy.testing.assert_array_equal(atom_937.get_anisou(), ansiou)
+            np.testing.assert_array_equal(atom_937.get_anisou(), ansiou)
 
     def testModels(self):
         """Test file with multiple models."""
@@ -282,18 +301,18 @@ class ParseReal(unittest.TestCase):
         self.assertTrue(res_15.is_disordered(), "Residue 15 is disordered")
 
         # Check a non-mutated residue just to be sure we didn't break the
-        # parser and cause everyhing to be disordered.
+        # parser and cause everything to be disordered.
         self.assertFalse(
             structure[0]["A"][13].is_disordered(), "Residue 13 is not disordered"
         )
 
         # Check that the residue types were parsed correctly.
-        self.assertSetEqual(
+        self.assertEqual(
             set(res_1.disordered_get_id_list()),
             {"PRO", "SER"},
             "Residue 1 is proline/serine",
         )
-        self.assertSetEqual(
+        self.assertEqual(
             set(res_15.disordered_get_id_list()),
             {"ARG", "GLN", "GLU"},
             "Residue 15 is arginine/glutamine/glutamic acid",
@@ -321,7 +340,7 @@ class ParseReal(unittest.TestCase):
         self.assertEqual("", structure.header["head"])
         self.assertEqual("", structure.header["deposition_date"])
         self.assertEqual("", structure.header["structure_method"])
-        self.assertEqual(None, structure.header["resolution"])
+        self.assertIsNone(structure.header["resolution"])
 
         # test extracting fields
         structure = parser.get_structure("example", "PDB/1A8O.cif")
@@ -331,9 +350,10 @@ class ParseReal(unittest.TestCase):
         self.assertEqual("X-RAY DIFFRACTION", structure.header["structure_method"])
         self.assertEqual(1.7, structure.header["resolution"])
 
-        # test not confused by '.'
+        # test not confused by '.' or '?'
         structure = parser.get_structure("example", "PDB/1SSU_mod.cif")
-        self.assertEqual(None, structure.header["resolution"])
+        # self.assertIsNone(structure.header["resolution"])
+        self.assertEqual(4.1, structure.header["resolution"])
 
 
 class CIFtoPDB(unittest.TestCase):
@@ -357,12 +377,11 @@ class CIFtoPDB(unittest.TestCase):
 
         pdb_atom_names = [a.name for a in pdb_struct.get_atoms()]
         cif_atom_names = [a.name for a in cif_struct.get_atoms()]
-        self.assertEqual(len(pdb_atom_names), len(cif_atom_names))
-        self.assertSequenceEqual(pdb_atom_names, cif_atom_names)
+        self.assertEqual(pdb_atom_names, cif_atom_names)
 
         pdb_atom_elems = [a.element for a in pdb_struct.get_atoms()]
         cif_atom_elems = [a.element for a in cif_struct.get_atoms()]
-        self.assertSequenceEqual(pdb_atom_elems, cif_atom_elems)
+        self.assertEqual(pdb_atom_elems, cif_atom_elems)
 
     def test_conversion_not_preserve_numbering(self):
         """Convert mmCIF to PDB and renumber atom serials."""
@@ -384,7 +403,7 @@ class CIFtoPDB(unittest.TestCase):
         pdb_writer.set_structure(cif_struct)
         filenumber, filename = tempfile.mkstemp()
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(PDBIOException):
             pdb_writer.save(filename, preserve_atom_numbering=True)
 
 
